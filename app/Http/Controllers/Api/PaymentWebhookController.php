@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Services\OrderService;
-use App\Services\PaymentGateways\SSLCommerzGateway;
+use App\Services\PaymentGateways\BkashGateway;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -22,13 +23,52 @@ class PaymentWebhookController extends Controller
     {
         $payload = $request->all();
 
-        if ($method === 'sslcommerz' && config('payment.verify_webhooks', true)) {
-            $gateway = new SSLCommerzGateway;
+        if ($method === 'bkash') {
+            $gateway = new BkashGateway;
+            $paymentId = $payload['paymentID'] ?? '';
 
-            if (! $gateway->verifyPayment(new Payment, $payload)) {
-                Log::warning('SSLCommerz webhook signature verification failed', ['payload' => $payload]);
+            if (! $paymentId) {
+                return response()->json(['status' => 'error', 'message' => 'Missing paymentID'], 400);
+            }
 
-                return response()->json(['status' => 'error', 'message' => 'Verification failed'], 400);
+            try {
+                $payment = Payment::where('gateway', 'bkash')
+                    ->where('gateway_transaction_id', $paymentId)
+                    ->first();
+
+                if (! $payment) {
+                    Log::warning('bKash webhook received for unknown payment', ['paymentID' => $paymentId]);
+
+                    return response()->json(['status' => 'error'], 404);
+                }
+
+                if ($payment->isPaid()) {
+                    return response()->json(['status' => 'ok']);
+                }
+
+                $verified = $gateway->verifyPayment($payment, $payload);
+
+                if (! $verified) {
+                    Log::warning('bKash webhook execute failed', ['payment_id' => $payment->id]);
+
+                    return response()->json(['status' => 'error', 'message' => 'Verification failed'], 400);
+                }
+
+                $payment->update([
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                    'gateway_response' => $payload,
+                ]);
+
+                if ($payment->order->status === 'pending') {
+                    $this->orderService->confirmPayment($payment->order, $payment);
+                }
+
+                return response()->json(['status' => 'ok']);
+            } catch (\Exception $e) {
+                Log::error('bKash webhook error', ['error' => $e->getMessage()]);
+
+                return response()->json(['status' => 'error'], 500);
             }
         }
 
@@ -47,5 +87,66 @@ class PaymentWebhookController extends Controller
         }
 
         return response()->json(['status' => 'ok']);
+    }
+
+    public function handleBkashCallback(Request $request): RedirectResponse
+    {
+        $status = $request->query('status');
+        $paymentId = $request->query('paymentID');
+        $orderNumber = $request->query('order');
+
+        if (! $paymentId || ! $orderNumber) {
+            return redirect('/checkout?error=bkash_missing_params');
+        }
+
+        try {
+            $payment = Payment::where('gateway', 'bkash')
+                ->where('gateway_transaction_id', $paymentId)
+                ->first();
+
+            if (! $payment) {
+                return redirect('/checkout?error=bkash_payment_not_found');
+            }
+
+            if ($payment->isPaid()) {
+                return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_success');
+            }
+
+            if ($status === 'success') {
+                $gateway = new BkashGateway;
+                $verified = $gateway->queryPaymentStatus($payment);
+
+                if ($verified) {
+                    $payment->update([
+                        'status' => 'paid',
+                        'paid_at' => now(),
+                    ]);
+
+                    if ($payment->order->status === 'pending') {
+                        $this->orderService->confirmPayment($payment->order, $payment);
+                    }
+
+                    return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_success');
+                }
+
+                return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_pending');
+            }
+
+            if (in_array($status, ['failure', 'cancel'])) {
+                $payment->update(['status' => $status === 'cancel' ? 'cancelled' : 'failed']);
+
+                if ($payment->order->status === 'pending') {
+                    $this->orderService->handlePaymentFailure($payment->order);
+                }
+
+                return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_'.$status);
+            }
+
+            return redirect('/checkout?error=bkash_unknown_status');
+        } catch (\Exception $e) {
+            Log::error('bKash callback error', ['error' => $e->getMessage()]);
+
+            return redirect('/checkout?error=bkash_callback_error');
+        }
     }
 }

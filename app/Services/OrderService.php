@@ -145,7 +145,7 @@ class OrderService
                 'shipping_phone' => $shippingData['delivery_phone'] ?? $shippingData['phone'] ?? null,
                 'shipping_address' => $shippingData['shipping_address'],
                 'shipping_city' => $shippingData['shipping_city'],
-                'shipping_state' => $shippingData['shipping_state'],
+                'shipping_state' => $shippingData['shipping_state'] ?? null,
                 'shipping_postal_code' => $shippingData['shipping_postal_code'] ?? null,
                 'shipping_country' => $shippingData['shipping_country'] ?? 'Bangladesh',
                 'notes' => $shippingData['notes'] ?? null,

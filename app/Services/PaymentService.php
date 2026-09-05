@@ -5,23 +5,21 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\PaymentGateways\PaymentGateway;
+use App\Services\PaymentGateways\PaymentGatewayFactory;
 use App\Services\PaymentGateways\SSLCommerzGateway;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
 
 class PaymentService
 {
-    private PaymentGateway $gateway;
-
-    public function __construct()
-    {
-        $this->gateway = app($this->getGatewayClass());
-    }
+    private ?PaymentGateway $gateway = null;
 
     public function initiate(Order $order, Payment $payment, ?string $paymentMethod = null): array
     {
+        $gateway = $this->resolveGateway($paymentMethod);
+
         try {
-            $result = $this->gateway->initiatePayment($order, $payment);
+            $result = $gateway->initiatePayment($order, $payment);
 
             return [
                 'payment_id' => $payment->id,
@@ -57,7 +55,9 @@ class PaymentService
 
     public function handleWebhook(string $method, array $payload): ?Payment
     {
-        $result = $this->gateway->processWebhook($payload);
+        $gateway = $this->resolveGateway($method);
+
+        $result = $gateway->processWebhook($payload);
 
         $gatewayTransactionId = $result['gateway_transaction_id'] ?? '';
 
@@ -65,7 +65,7 @@ class PaymentService
             return null;
         }
 
-        $payment = Payment::where('gateway', $this->gateway->getName())
+        $payment = Payment::where('gateway', $gateway->getName())
             ->where('gateway_transaction_id', $gatewayTransactionId)
             ->first();
 
@@ -74,7 +74,7 @@ class PaymentService
 
             if ($paymentId) {
                 $payment = Payment::where('id', $paymentId)
-                    ->where('gateway', $this->gateway->getName())
+                    ->where('gateway', $gateway->getName())
                     ->first();
             }
         }
@@ -105,7 +105,9 @@ class PaymentService
             return false;
         }
 
-        $result = $this->gateway->refund($payment, $amount);
+        $gateway = $this->resolveGateway($payment->gateway);
+
+        $result = $gateway->refund($payment, $amount);
 
         if ($result) {
             $payment->update([
@@ -116,16 +118,21 @@ class PaymentService
         return $result;
     }
 
-    public function getGateway(): PaymentGateway
+    public function getGateway(?string $paymentMethod = null): PaymentGateway
     {
-        return $this->gateway;
+        return $this->resolveGateway($paymentMethod);
     }
 
-    private function getGatewayClass(): string
+    private function resolveGateway(?string $paymentMethod = null): PaymentGateway
     {
-        return match (config('payment.default')) {
-            'sslcommerz' => SSLCommerzGateway::class,
-            default => SSLCommerzGateway::class,
-        };
+        $name = $paymentMethod ?? config('payment.default', 'sslcommerz');
+
+        $gateway = PaymentGatewayFactory::make($name);
+
+        if (! $gateway) {
+            return app(SSLCommerzGateway::class);
+        }
+
+        return $gateway;
     }
 }

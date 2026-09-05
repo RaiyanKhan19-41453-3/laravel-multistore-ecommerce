@@ -11,6 +11,8 @@ Route::get('/products/{slug}', fn (string $slug) => Inertia::render('store/produ
 
 Route::get('/account/login', fn () => Inertia::render('account/login'))->name('store.login');
 Route::get('/account/register', fn () => Inertia::render('account/register'))->name('store.register');
+Route::get('/account/forgot-password', fn () => Inertia::render('account/forgot-password'))->name('store.forgot-password');
+Route::get('/account/reset-password', fn () => Inertia::render('account/reset-password'))->name('store.reset-password');
 Route::get('/cart', fn () => Inertia::render('account/cart'))->name('store.cart');
 
 Route::get('/products', fn () => Inertia::render('store/products/index'))->name('store.products');

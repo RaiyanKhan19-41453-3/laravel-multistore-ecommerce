@@ -29,6 +29,7 @@ class Order extends Model
         'shipping_method_id',
         'shipping_method_name',
         'shipping_estimated_days',
+        'fulfillment_type',
         'discount_ids',
         'notes',
         'shipping_name',
@@ -39,6 +40,9 @@ class Order extends Model
         'shipping_postal_code',
         'shipping_country',
         'cancellation_reason',
+        'delivered_at',
+        'shipped_at',
+        'cancelled_at',
         'expires_at',
     ];
 
@@ -91,6 +95,11 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(Shipment::class);
     }
 
     public function appliedDiscounts()

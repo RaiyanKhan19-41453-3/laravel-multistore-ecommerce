@@ -4,12 +4,13 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('PRAGMA foreign_keys = OFF');
+        Schema::disableForeignKeyConstraints();
 
         $products = Product::all();
         $variants = ProductVariant::all();
@@ -38,11 +39,13 @@ return new class extends Migration
             ]);
         }
 
-        DB::statement('PRAGMA foreign_keys = ON');
+        Schema::enableForeignKeyConstraints();
     }
 
     public function down(): void
     {
+        Schema::disableForeignKeyConstraints();
         DB::table('inventories')->truncate();
+        Schema::enableForeignKeyConstraints();
     }
 };

@@ -31,7 +31,7 @@ class OrderController extends Controller
     public function show(Request $request, int $order): JsonResponse
     {
         $order = Order::where('user_id', $request->user()->id)
-            ->with(['items.product', 'items.productVariant', 'payments', 'coupon'])
+            ->with(['items.product', 'items.productVariant', 'payments', 'coupon', 'shipments'])
             ->findOrFail($order);
 
         return response()->json([
@@ -82,7 +82,7 @@ class OrderController extends Controller
             ], 404);
         }
 
-        $query = Order::with(['items.product', 'items.productVariant', 'payments', 'coupon'])
+        $query = Order::with(['items.product', 'items.productVariant', 'payments', 'coupon', 'shipments'])
             ->where('order_number', $validated['order_number']);
 
         $query->where(function ($q) use ($email, $phone) {

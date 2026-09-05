@@ -86,6 +86,12 @@ export default function StoreLogin() {
                         Register
                     </Link>
                 </p>
+
+                <p className="mt-2 text-center text-sm text-[var(--store-muted)]">
+                    <Link href="/account/forgot-password" className="text-[var(--store-accent)] hover:underline">
+                        Forgot your password?
+                    </Link>
+                </p>
             </div>
         </StoreLayout>
     );

@@ -45,6 +45,16 @@ interface Order {
     notes: string | null;
     items: OrderItem[];
     applied_discounts: AppliedDiscount[];
+    shipments: Shipment[];
+}
+
+interface Shipment {
+    id: number;
+    courier: string | null;
+    tracking_number: string | null;
+    status: string;
+    note: string | null;
+    created_at: string;
 }
 
 interface LookupForm {
@@ -291,24 +301,16 @@ export default function OrderConfirmation() {
                             <span>{formatPrice(order.subtotal)}</span>
                         </div>
 
-                        {hasDiscounts && order.applied_discounts.map((discount) => (
-                            <div key={discount.id} className="flex justify-between text-green-600">
-                                <span>{discount.name}</span>
-                                <span>-{formatPrice((order.subtotal * discount.value) / 100)}</span>
-                            </div>
-                        ))}
-
-                        {hasCoupon && (
+                        {order.discount_total > 0 && (
                             <div className="flex justify-between text-green-600">
-                                <span>Coupon ({order.coupon_code})</span>
+                                <span>Discount</span>
                                 <span>-{formatPrice(order.discount_total)}</span>
                             </div>
                         )}
 
-                        {!hasDiscounts && !hasCoupon && order.discount_total > 0 && (
+                        {hasCoupon && (
                             <div className="flex justify-between text-green-600">
-                                <span>Discount</span>
-                                <span>-{formatPrice(order.discount_total)}</span>
+                                <span>Coupon ({order.coupon_code})</span>
                             </div>
                         )}
 
@@ -333,7 +335,7 @@ export default function OrderConfirmation() {
                     </div>
 
                     {/* Discount Summary */}
-                    {(hasDiscounts || hasCoupon) && order.discount_total > 0 && (
+                    {order.discount_total > 0 && (
                         <div className="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
                             <p className="font-medium">You saved {formatPrice(order.discount_total)} on this order!</p>
                             {hasDiscounts && (
@@ -374,6 +376,36 @@ export default function OrderConfirmation() {
                                 : `Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}`}
                     </div>
                 </div>
+
+                {/* Tracking */}
+                {order.shipments && order.shipments.length > 0 && (
+                    <div className="mb-6 rounded-lg border border-[var(--store-border)] p-6">
+                        <div className="mb-3 flex items-center gap-2">
+                            <Truck className="h-5 w-5 text-[var(--store-muted)]" />
+                            <h2 className="text-lg font-semibold">Tracking</h2>
+                        </div>
+                        <div className="space-y-3">
+                            {order.shipments.map((shipment) => (
+                                <div key={shipment.id} className="rounded-md bg-blue-50 p-4 text-sm dark:bg-blue-900/20">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-medium text-blue-800 dark:text-blue-300">{shipment.courier}</p>
+                                            <p className="text-blue-700 dark:text-blue-400">
+                                                Tracking: <span className="font-mono">{shipment.tracking_number}</span>
+                                            </p>
+                                        </div>
+                                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-800 dark:text-blue-200">
+                                            {shipment.status.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    {shipment.note && (
+                                        <p className="mt-2 text-xs text-blue-600 dark:text-blue-300 italic">{shipment.note}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Notes */}
                 {order.notes && (

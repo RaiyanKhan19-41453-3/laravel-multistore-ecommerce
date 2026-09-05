@@ -9,6 +9,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::disableForeignKeyConstraints();
+
         Schema::create('carts_new', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
@@ -26,10 +28,14 @@ return new class extends Migration
 
         Schema::dropIfExists('carts');
         Schema::rename('carts_new', 'carts');
+
+        Schema::enableForeignKeyConstraints();
     }
 
     public function down(): void
     {
+        Schema::disableForeignKeyConstraints();
+
         Schema::create('carts_new', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->unique()->constrained()->nullOnDelete();
@@ -47,5 +53,7 @@ return new class extends Migration
 
         Schema::dropIfExists('carts');
         Schema::rename('carts_new', 'carts');
+
+        Schema::enableForeignKeyConstraints();
     }
 };

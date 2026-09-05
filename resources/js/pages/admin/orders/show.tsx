@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ArrowLeft, Package, Truck, XCircle } from 'lucide-react';
+import { ArrowLeft, Package, Pencil, Truck, XCircle } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 interface OrderItem {
@@ -32,6 +32,15 @@ interface Payment {
     gateway: string;
     gateway_transaction_id: string | null;
     paid_at: string | null;
+    created_at: string;
+}
+
+interface Shipment {
+    id: number;
+    courier: string | null;
+    tracking_number: string | null;
+    status: string;
+    note: string | null;
     created_at: string;
 }
 
@@ -60,10 +69,17 @@ interface Order {
     cancelled_at: string | null;
     items: OrderItem[];
     payments: Payment[];
+    shipments: Shipment[];
     user: { id: number; name: string; email: string } | null;
     guest_email: string | null;
     guest_phone: string | null;
     coupon: { id: number; code: string; discount: { name: string } } | null;
+}
+
+interface Courier {
+    id: number;
+    name: string;
+    code: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -93,7 +109,7 @@ function getStatusBadge(status: string) {
     return map[status] ?? { label: status, variant: 'secondary' as const };
 }
 
-export default function OrderShow({ order }: { order: Order }) {
+export default function OrderShow({ order, couriers }: { order: Order; couriers: Courier[] }) {
     const [showStatusDialog, setShowStatusDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
 
@@ -103,6 +119,25 @@ export default function OrderShow({ order }: { order: Order }) {
 
     const { data: cancelData, setData: setCancelData, post: postCancel, processing: cancelProcessing } = useForm({
         cancellation_reason: '',
+    });
+
+    const [showShipmentDialog, setShowShipmentDialog] = useState(false);
+    const { data: shipmentData, setData: setShipmentData, post: postShipment, processing: shipmentProcessing, reset: resetShipment } = useForm({
+        courier_id: '',
+        tracking_number: '',
+        note: '',
+    });
+
+    const [editShipment, setEditShipment] = useState<Shipment | null>(null);
+    const { data: updateShipmentData, setData: setUpdateShipmentData, put: putShipment, processing: updateShipmentProcessing } = useForm({
+        status: '',
+        tracking_number: '',
+        note: '',
+    });
+
+    const [showSendToCourierDialog, setShowSendToCourierDialog] = useState(false);
+    const { data: sendCourierData, setData: setSendCourierData, post: postSendCourier, processing: sendCourierProcessing } = useForm({
+        courier_id: '',
     });
 
     const handleStatusUpdate: FormEventHandler = (e) => {
@@ -116,6 +151,31 @@ export default function OrderShow({ order }: { order: Order }) {
         e.preventDefault();
         postCancel(route('admin.orders.cancel', order.id), {
             onSuccess: () => setShowCancelDialog(false),
+        });
+    };
+
+    const handleAddShipment: FormEventHandler = (e) => {
+        e.preventDefault();
+        postShipment(route('admin.orders.shipments.store', order.id), {
+            onSuccess: () => {
+                setShowShipmentDialog(false);
+                resetShipment();
+            },
+        });
+    };
+
+    const handleUpdateShipment: FormEventHandler = (e) => {
+        e.preventDefault();
+        if (!editShipment) return;
+        putShipment(route('admin.orders.shipments.update', [order.id, editShipment.id]), {
+            onSuccess: () => setEditShipment(null),
+        });
+    };
+
+    const handleSendToCourier: FormEventHandler = (e) => {
+        e.preventDefault();
+        postSendCourier(route('admin.orders.send-to-courier', order.id), {
+            onSuccess: () => setShowSendToCourierDialog(false),
         });
     };
 
@@ -210,6 +270,59 @@ export default function OrderShow({ order }: { order: Order }) {
                                 <p className="mt-1 text-sm text-red-600 dark:text-red-300">{order.cancellation_reason}</p>
                             </div>
                         )}
+
+                        <div className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+                            <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800 flex items-center justify-between">
+                                <h3 className="font-semibold">Fulfillment</h3>
+                                {['confirmed', 'processing'].includes(order.status) && (
+                                    <div className="flex items-center gap-2">
+                                        <Button size="sm" variant="outline" onClick={() => setShowSendToCourierDialog(true)}>
+                                            Send to Courier
+                                        </Button>
+                                        <Button size="sm" onClick={() => setShowShipmentDialog(true)}>
+                                            Add Tracking
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="px-4 py-3">
+                                {order.shipments.length === 0 ? (
+                                    <p className="text-sm text-neutral-500">No shipments yet. Add tracking info when you send this order to a courier.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {order.shipments.map((shipment) => (
+                                            <div key={shipment.id} className="rounded-lg border border-neutral-100 p-3 dark:border-neutral-800">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium">{shipment.courier}</p>
+                                                        <p className="text-sm text-neutral-500">Tracking: {shipment.tracking_number}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant={shipment.status === 'delivered' ? 'default' : 'secondary'}>
+                                                            {shipment.status.replace('_', ' ')}
+                                                        </Badge>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditShipment(shipment);
+                                                                setUpdateShipmentData('status', shipment.status);
+                                                                setUpdateShipmentData('tracking_number', shipment.tracking_number ?? '');
+                                                                setUpdateShipmentData('note', shipment.note ?? '');
+                                                            }}
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {shipment.note && (
+                                                    <p className="mt-1 text-xs text-neutral-400 italic">{shipment.note}</p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="space-y-6">
@@ -401,6 +514,149 @@ export default function OrderShow({ order }: { order: Order }) {
                             <Button variant="destructive" disabled={cancelProcessing}>
                                 Cancel Order
                             </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showShipmentDialog} onOpenChange={setShowShipmentDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add Shipment Tracking</DialogTitle>
+                        <DialogDescription>
+                            Enter the courier and tracking number for order {order.order_number}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleAddShipment} className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label>Courier</Label>
+                            <Select value={shipmentData.courier_id} onValueChange={(v) => setShipmentData('courier_id', v)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select courier" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {couriers.map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Tracking Number</Label>
+                            <input
+                                type="text"
+                                required
+                                value={shipmentData.tracking_number}
+                                onChange={(e) => setShipmentData('tracking_number', e.target.value)}
+                                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+                                placeholder="e.g. PTH-98765"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Note (optional)</Label>
+                            <Textarea
+                                value={shipmentData.note}
+                                onChange={(e) => setShipmentData('note', e.target.value)}
+                                placeholder="e.g. Fragile items"
+                                rows={2}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setShowShipmentDialog(false)}>
+                                Cancel
+                            </Button>
+                            <Button disabled={shipmentProcessing}>Add Shipment</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Shipment Dialog */}
+            <Dialog open={!!editShipment} onOpenChange={(open) => !open && setEditShipment(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Update Shipment</DialogTitle>
+                        <DialogDescription>
+                            Update tracking for {editShipment?.courier}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleUpdateShipment} className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label>Status</Label>
+                            <Select value={updateShipmentData.status} onValueChange={(v) => setUpdateShipmentData('status', v)}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="picked">Picked Up</SelectItem>
+                                    <SelectItem value="in_transit">In Transit</SelectItem>
+                                    <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                                    <SelectItem value="delivered">Delivered</SelectItem>
+                                    <SelectItem value="failed">Failed</SelectItem>
+                                    <SelectItem value="returned">Returned</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Tracking Number</Label>
+                            <input
+                                type="text"
+                                value={updateShipmentData.tracking_number}
+                                onChange={(e) => setUpdateShipmentData('tracking_number', e.target.value)}
+                                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Note (optional)</Label>
+                            <Textarea
+                                value={updateShipmentData.note}
+                                onChange={(e) => setUpdateShipmentData('note', e.target.value)}
+                                rows={2}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setEditShipment(null)}>
+                                Cancel
+                            </Button>
+                            <Button disabled={updateShipmentProcessing}>Update Shipment</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Send to Courier Dialog */}
+            <Dialog open={showSendToCourierDialog} onOpenChange={setShowSendToCourierDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Send to Courier</DialogTitle>
+                        <DialogDescription>
+                            This will create a shipment via the courier API and auto-mark the order as shipped.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSendToCourier} className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label>Courier</Label>
+                            <Select value={sendCourierData.courier_id} onValueChange={(v) => setSendCourierData('courier_id', v)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select courier" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {couriers.map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setShowSendToCourierDialog(false)}>
+                                Cancel
+                            </Button>
+                            <Button disabled={sendCourierProcessing}>Send to Courier</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>

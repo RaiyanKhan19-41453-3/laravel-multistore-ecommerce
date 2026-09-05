@@ -6,6 +6,7 @@ use App\Helpers\PhoneHelper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\OrderService;
+use App\Services\PaymentGateways\PaymentGatewayFactory;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class CheckoutController extends Controller
             'shipping_state' => 'nullable|string|max:100',
             'shipping_postal_code' => 'nullable|string|max:20',
             'shipping_country' => 'nullable|string|max:100',
-            'payment_method' => 'required|string|in:bkash,nagad,rocket,card,cod',
+            'payment_method' => 'required|string|in:'.implode(',', PaymentGatewayFactory::getEnabled()),
             'shipping_rate_id' => 'required|integer|exists:shipping_rates,id',
             'notes' => 'nullable|string|max:500',
             'guest_email' => $isGuest ? 'required|email|max:255' : 'nullable|email|max:255',

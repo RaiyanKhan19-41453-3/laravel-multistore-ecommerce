@@ -9,6 +9,11 @@ function formatPrice(value: number): string {
     return `\u09f3${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
+interface PaymentMethodOption {
+    value: string;
+    label: string;
+}
+
 interface ShippingForm {
     guest_email: string;
     phone: string;
@@ -17,6 +22,7 @@ interface ShippingForm {
     shipping_name: string;
     shipping_address: string;
     shipping_city: string;
+    shipping_state: string;
     shipping_postal_code: string;
     shipping_country: string;
     payment_method: string;
@@ -35,14 +41,6 @@ interface ShippingRateOption {
     is_free: boolean;
 }
 
-const PAYMENT_METHODS = [
-    { value: 'cod', label: 'Cash on Delivery', icon: Truck },
-    { value: 'bkash', label: 'bKash', icon: CreditCard },
-    { value: 'nagad', label: 'Nagad', icon: CreditCard },
-    { value: 'rocket', label: 'Rocket', icon: CreditCard },
-    { value: 'card', label: 'Card', icon: CreditCard },
-];
-
 export default function Checkout() {
     const [cart, setCart] = useState<CartSummary | null>(null);
     const [loading, setLoading] = useState(true);
@@ -60,6 +58,7 @@ export default function Checkout() {
         shipping_name: user?.name ?? '',
         shipping_address: '',
         shipping_city: '',
+        shipping_state: '',
         shipping_postal_code: '',
         shipping_country: 'Bangladesh',
         payment_method: 'cod',
@@ -72,6 +71,7 @@ export default function Checkout() {
     const [shippingRates, setShippingRates] = useState<ShippingRateOption[]>([]);
     const [selectedRateId, setSelectedRateId] = useState<number | null>(null);
     const [shippingLoading, setShippingLoading] = useState(false);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
     const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const fetchCart = () => {
@@ -94,6 +94,17 @@ export default function Checkout() {
     useEffect(() => {
         fetchCart();
         fetchCities();
+
+        void apiStore<{ methods: PaymentMethodOption[] }>('/payment-methods').then((res) => {
+            if (res.ok && res.data?.methods) {
+                setPaymentMethods(res.data.methods);
+
+                setForm((prev) => ({
+                    ...prev,
+                    payment_method: prev.payment_method || res.data.methods[0]?.value || 'cod',
+                }));
+            }
+        });
     }, []);
 
     useEffect(() => {
@@ -189,6 +200,7 @@ export default function Checkout() {
             delivery_phone: form.use_same_phone ? '' : form.delivery_phone,
             shipping_address: form.shipping_address,
             shipping_city: form.shipping_city,
+            shipping_state: form.shipping_state,
             shipping_postal_code: form.shipping_postal_code,
             shipping_country: form.shipping_country,
             payment_method: form.payment_method,
@@ -481,7 +493,7 @@ export default function Checkout() {
                             <section className="rounded-lg border border-[var(--store-border)] p-5">
                                 <h2 className="mb-4 text-lg font-semibold">Payment Method</h2>
                                 <div className="space-y-2">
-                                    {PAYMENT_METHODS.map((method) => (
+                                    {paymentMethods.map((method) => (
                                         <label
                                             key={method.value}
                                             className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition ${
@@ -498,7 +510,11 @@ export default function Checkout() {
                                                 onChange={(e) => setField('payment_method', e.target.value)}
                                                 className="accent-[var(--store-accent)]"
                                             />
-                                            <method.icon className="h-4 w-4 text-[var(--store-muted)]" />
+                                            {method.value === 'cod' ? (
+                                                <Truck className="h-4 w-4 text-[var(--store-muted)]" />
+                                            ) : (
+                                                <CreditCard className="h-4 w-4 text-[var(--store-muted)]" />
+                                            )}
                                             <span className="text-sm font-medium">{method.label}</span>
                                         </label>
                                     ))}

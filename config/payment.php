@@ -35,6 +35,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Enabled Payment Gateways
+    |--------------------------------------------------------------------------
+    | Set to false to disable a gateway. Disabled gateways won't appear
+    | in checkout or accept payments.
+    */
+    'enabled' => [
+        'cod' => env('PAYMENT_COD_ENABLED', true),
+        'sslcommerz' => env('PAYMENT_SSLCOMMERZ_ENABLED', true),
+        'bkash' => env('PAYMENT_BKASH_ENABLED', false),
+        'nagad' => env('PAYMENT_NAGAD_ENABLED', false),
+        'rocket' => env('PAYMENT_ROCKET_ENABLED', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Gateway Configurations
     |--------------------------------------------------------------------------
     */
@@ -43,6 +58,13 @@ return [
             'store_id' => env('SSLCOMMERZ_STORE_ID'),
             'store_password' => env('SSLCOMMERZ_STORE_PASSWORD'),
             'sandbox' => env('SSLCOMMERZ_SANDBOX', true),
+        ],
+        'bkash' => [
+            'app_key' => env('BKASH_APP_KEY'),
+            'app_secret' => env('BKASH_APP_SECRET'),
+            'username' => env('BKASH_USERNAME'),
+            'password' => env('BKASH_PASSWORD'),
+            'sandbox' => env('BKASH_SANDBOX', true),
         ],
     ],
 ];

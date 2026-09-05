@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Package, Percent, Receipt, SlidersHorizontal, Tags, Trophy, Warehouse, Activity, Truck } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, Package, Percent, Receipt, SlidersHorizontal, Tags, Trophy, Warehouse, Activity, Truck, Bike } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -52,6 +52,11 @@ const mainNavItems: NavItem[] = [
         title: 'Shipping',
         url: '/admin/shipping',
         icon: Truck,
+    },
+    {
+        title: 'Couriers',
+        url: '/admin/couriers',
+        icon: Bike,
     },
     {
         title: 'Store Activity',

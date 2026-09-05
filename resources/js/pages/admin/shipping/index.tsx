@@ -24,6 +24,8 @@ interface ShippingZone {
     id: number;
     name: string;
     cities: string[] | null;
+    is_fallback: boolean;
+    country: string;
     is_active: boolean;
     sort_order: number;
 }
@@ -110,10 +112,11 @@ function ZoneForm({ zone, onClose }: { zone?: ShippingZone | null; onClose: () =
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         const cities = isFallback ? [] : (data.cities as string).split(',').map((c: string) => c.trim()).filter(Boolean);
+        setData('cities', cities as never);
         if (isEdit) {
-            put(route('admin.shipping.zones.update', zone.id), { ...data, cities }, { onSuccess: () => onClose() });
+            put(route('admin.shipping.zones.update', zone.id), { onSuccess: () => onClose() });
         } else {
-            post(route('admin.shipping.zones.store'), { ...data, cities }, { onSuccess: () => onClose() });
+            post(route('admin.shipping.zones.store'), { onSuccess: () => onClose() });
         }
     };
 

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedBigInteger('discountable_id');
             $table->timestamps();
 
-            $table->unique(['discount_id', 'discountable_type', 'discountable_id']);
+            $table->unique(['discount_id', 'discountable_type', 'discountable_id'], 'discountables_unique');
             $table->index(['discountable_type', 'discountable_id']);
         });
     }

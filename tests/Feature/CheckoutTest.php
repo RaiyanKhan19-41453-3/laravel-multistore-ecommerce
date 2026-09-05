@@ -11,6 +11,14 @@ use App\Models\ShippingZone;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 
+beforeEach(function () {
+    config([
+        'payment.enabled.bkash' => true,
+        'payment.enabled.sslcommerz' => true,
+        'payment.enabled.cod' => true,
+    ]);
+});
+
 function createUser(): User
 {
     return User::factory()->create();
@@ -111,11 +119,23 @@ it('can checkout with cod', function () {
 });
 
 it('can checkout with bkash', function () {
+    config([
+        'payment.gateways.bkash.app_key' => 'test_key',
+        'payment.gateways.bkash.app_secret' => 'test_secret',
+        'payment.gateways.bkash.username' => 'test_user',
+        'payment.gateways.bkash.password' => 'test_pass',
+        'payment.gateways.bkash.sandbox' => true,
+    ]);
+
     Http::fake([
-        'sandbox.sslcommerz.com/*' => Http::response([
-            'status' => 'SUCCESS',
-            'GatewayPageURL' => 'https://sandbox.sslcommerz.com/pay?token=abc123',
-            'sessionkey' => 'session123',
+        'tokenized.sandbox.bka.sh/*token/grant' => Http::response([
+            'id_token' => 'fake_token_123',
+            'expires_in' => 3600,
+        ], 200),
+        'tokenized.sandbox.bka.sh/*checkout/create' => Http::response([
+            'statusCode' => '0000',
+            'paymentID' => 'BKASH_PAY_TEST',
+            'bkashURL' => 'https://sandbox.bka.sh/pay?token=abc',
         ], 200),
     ]);
 
@@ -148,10 +168,22 @@ it('can checkout with bkash', function () {
 });
 
 it('returns 502 when gateway initiation fails', function () {
+    config([
+        'payment.gateways.bkash.app_key' => 'test_key',
+        'payment.gateways.bkash.app_secret' => 'test_secret',
+        'payment.gateways.bkash.username' => 'test_user',
+        'payment.gateways.bkash.password' => 'test_pass',
+        'payment.gateways.bkash.sandbox' => true,
+    ]);
+
     Http::fake([
-        'sandbox.sslcommerz.com/*' => Http::response([
-            'status' => 'FAILED',
-            'failedreason' => 'Invalid credentials',
+        'tokenized.sandbox.bka.sh/*token/grant' => Http::response([
+            'id_token' => 'fake_token_123',
+            'expires_in' => 3600,
+        ], 200),
+        'tokenized.sandbox.bka.sh/*checkout/create' => Http::response([
+            'statusCode' => '1001',
+            'statusMessage' => 'Invalid credentials',
         ], 200),
     ]);
 

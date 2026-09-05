@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AttributeController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\CourierController;
 use App\Http\Controllers\Admin\DiscountController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OrderController;
@@ -83,6 +84,10 @@ Route::middleware(['auth', 'role:super-admin'])->prefix('admin')->name('admin.')
     Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update-status');
     Route::post('orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+    Route::post('orders/{order}/shipments', [OrderController::class, 'storeShipment'])->name('orders.shipments.store');
+    Route::post('orders/{order}/send-to-courier', [OrderController::class, 'sendToCourier'])->name('orders.send-to-courier');
+    Route::put('orders/{order}/shipments/{shipment}', [OrderController::class, 'updateShipment'])->name('orders.shipments.update');
+    Route::delete('orders/{order}/shipments/{shipment}', [OrderController::class, 'destroyShipment'])->name('orders.shipments.destroy');
 
     Route::get('store-activity', [StoreActivityController::class, 'index'])->name('store-activity.index');
     Route::post('store-activity/clear-all-carts', [StoreActivityController::class, 'clearAllCarts'])->name('store-activity.clear-all-carts');
@@ -96,4 +101,11 @@ Route::middleware(['auth', 'role:super-admin'])->prefix('admin')->name('admin.')
     Route::delete('shipping/zones/{zone}', [ShippingController::class, 'destroyZone'])->name('shipping.zones.destroy');
     Route::post('shipping/rates', [ShippingController::class, 'storeRate'])->name('shipping.rates.store');
     Route::delete('shipping/rates/{rate}', [ShippingController::class, 'destroyRate'])->name('shipping.rates.destroy');
+
+    Route::get('couriers', [CourierController::class, 'index'])->name('couriers.index');
+    Route::post('couriers', [CourierController::class, 'store'])->name('couriers.store');
+    Route::put('couriers/{courier}', [CourierController::class, 'update'])->name('couriers.update');
+    Route::put('couriers/{courier}/settings', [CourierController::class, 'updateSettings'])->name('couriers.settings.update');
+    Route::post('couriers/{courier}/test-connection', [CourierController::class, 'testConnection'])->name('couriers.test-connection');
+    Route::delete('couriers/{courier}', [CourierController::class, 'destroy'])->name('couriers.destroy');
 });

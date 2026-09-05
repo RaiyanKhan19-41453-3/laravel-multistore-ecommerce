@@ -7,14 +7,23 @@ use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ShippingController;
+use App\Http\Controllers\Api\Webhooks\CourierWebhookController;
+use App\Http\Controllers\Api\Webhooks\PathaoWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/check-email', [AuthController::class, 'checkEmail'])
+    ->middleware('throttle:10,1');
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
+    ->middleware('throttle:5,1');
+Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
+    ->middleware('throttle:10,1');
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
     ->middleware('throttle:10,1');
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -62,6 +71,24 @@ Route::get('/brands/{slug}', [BrandController::class, 'show']);
 Route::get('/shipping/cities', [ShippingController::class, 'cities']);
 Route::get('/shipping/rates', [ShippingController::class, 'rates']);
 
+Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
+
 Route::post('/payments/webhook/{method}', [PaymentWebhookController::class, 'handle'])
     ->middleware('throttle:60,1')
     ->name('payments.webhook.sslcommerz');
+
+Route::get('/payments/callback/bkash', [PaymentWebhookController::class, 'handleBkashCallback'])
+    ->middleware('throttle:30,1')
+    ->name('payments.callback.bkash');
+
+Route::post('/payments/webhook/bkash', [PaymentWebhookController::class, 'handle'])
+    ->middleware('throttle:60,1')
+    ->name('payments.webhook.bkash');
+
+Route::post('/webhooks/pathao', [PathaoWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->name('webhooks.pathao');
+
+Route::post('/webhooks/couriers/{courier}', [CourierWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->name('webhooks.couriers');

@@ -85,10 +85,11 @@ class SSLCommerzGateway implements PaymentGateway
         }
 
         try {
-            $response = Http::timeout(30)->post($this->baseUrl.'/validator/api/validationserver.php', [
+            $response = Http::timeout(30)->get($this->baseUrl.'/validator/api/validationserverAPI.php', [
                 'val_id' => $valId,
                 'store_id' => $this->storeId,
                 'store_passwd' => $this->storePassword,
+                'format' => 'json',
             ]);
 
             $data = $response->json();
@@ -120,12 +121,13 @@ class SSLCommerzGateway implements PaymentGateway
     public function refund(Payment $payment, float $amount): bool
     {
         try {
-            $response = Http::timeout(30)->post($this->baseUrl.'/validator/api/refund.php', [
+            $response = Http::timeout(30)->get($this->baseUrl.'/validator/api/merchantTransIDvalidationAPI.php', [
                 'store_id' => $this->storeId,
                 'store_passwd' => $this->storePassword,
                 'refund_amount' => $amount,
                 'tran_id' => $payment->gateway_transaction_id,
                 'remarks' => 'Refund for order #'.$payment->order->order_number,
+                'format' => 'json',
             ]);
 
             $data = $response->json();
