@@ -20,6 +20,7 @@ class Shipment extends Model
         'shipping_cost',
         'note',
         'raw_response',
+        'courier_response',
     ];
 
     protected function casts(): array
@@ -27,6 +28,7 @@ class Shipment extends Model
         return [
             'shipping_cost' => 'decimal:2',
             'raw_response' => 'array',
+            'courier_response' => 'array',
         ];
     }
 

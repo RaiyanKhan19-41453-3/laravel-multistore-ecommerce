@@ -22,7 +22,7 @@ class Courier extends Model
     {
         return [
             'is_active' => 'boolean',
-            'settings' => 'array',
+            'settings' => 'encrypted:array',
         ];
     }
 

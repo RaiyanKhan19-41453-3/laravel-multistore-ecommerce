@@ -49,7 +49,7 @@ class PathaoGateway implements CourierGateway
             'item_type' => 2,
             'item_quantity' => $order->items->sum('quantity'),
             'item_weight' => 0.5,
-            'amount_to_collect' => (int) $order->total,
+            'amount_to_collect' => (int) round((float) $order->total),
             'item_description' => $order->items->pluck('name')->implode(', '),
         ];
 

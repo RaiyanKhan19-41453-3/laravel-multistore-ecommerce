@@ -15,10 +15,12 @@ use App\Http\Controllers\Api\Webhooks\CourierWebhookController;
 use App\Http\Controllers\Api\Webhooks\PathaoWebhookController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/auth/check-email', [AuthController::class, 'checkEmail'])
+Route::post('/auth/register', [AuthController::class, 'register'])
     ->middleware('throttle:10,1');
+Route::post('/auth/login', [AuthController::class, 'login'])
+    ->middleware('throttle:5,1');
+Route::post('/auth/check-email', [AuthController::class, 'checkEmail'])
+    ->middleware('throttle:5,1');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:5,1');
 Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp'])
@@ -28,6 +30,7 @@ Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/logout-all', [AuthController::class, 'logoutAll']);
     Route::post('/cart/merge', [CartController::class, 'merge']);
 
     Route::get('/orders', [OrderController::class, 'index']);
@@ -44,7 +47,7 @@ Route::middleware(['api.cart', 'throttle:30,1'])->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'store']);
 });
 
-Route::middleware(['throttle:10,1'])->group(function () {
+Route::middleware(['throttle:5,1'])->group(function () {
     Route::post('/orders/lookup', [OrderController::class, 'lookup']);
 });
 
@@ -75,15 +78,12 @@ Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
 
 Route::post('/payments/webhook/{method}', [PaymentWebhookController::class, 'handle'])
     ->middleware('throttle:60,1')
-    ->name('payments.webhook.sslcommerz');
+    ->whereIn('method', ['sslcommerz', 'bkash'])
+    ->name('payments.webhook.handle');
 
 Route::get('/payments/callback/bkash', [PaymentWebhookController::class, 'handleBkashCallback'])
     ->middleware('throttle:30,1')
     ->name('payments.callback.bkash');
-
-Route::post('/payments/webhook/bkash', [PaymentWebhookController::class, 'handle'])
-    ->middleware('throttle:60,1')
-    ->name('payments.webhook.bkash');
 
 Route::post('/webhooks/pathao', [PathaoWebhookController::class, 'handle'])
     ->middleware('throttle:120,1')

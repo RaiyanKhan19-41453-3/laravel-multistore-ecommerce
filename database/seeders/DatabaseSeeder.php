@@ -13,17 +13,21 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => 'password',
-        ]);
+        User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'password' => 'password',
+            ]
+        );
 
-        User::create([
-            'name' => 'Customer User',
-            'email' => 'customer@example.com',
-            'password' => Hash::make('password'),
-        ]);
+        User::firstOrCreate(
+            ['email' => 'customer@example.com'],
+            [
+                'name' => 'Customer User',
+                'password' => Hash::make('password'),
+            ]
+        );
 
         $this->call(PermissionSeeder::class);
         $this->call(BrandSeeder::class);

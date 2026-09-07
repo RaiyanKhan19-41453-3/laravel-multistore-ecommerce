@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { formatPrice } from '@/lib/format';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Eye } from 'lucide-react';
@@ -208,7 +209,7 @@ export default function OrdersIndex({ orders }: { orders: PaginatedOrders }) {
                                                     <span className="text-sm text-neutral-400">COD</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3 font-medium">৳{Number(order.total).toLocaleString()}</td>
+                                            <td className="px-4 py-3 font-medium">{formatPrice(order.total)}</td>
                                             <td className="px-4 py-3">
                                                 <Badge variant={status.variant}>{status.label}</Badge>
                                             </td>

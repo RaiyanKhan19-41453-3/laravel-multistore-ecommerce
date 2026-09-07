@@ -18,7 +18,7 @@ class OrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $orders = Order::where('user_id', $request->user()->id)
-            ->with(['items', 'payments'])
+            ->with(['items.product', 'payments'])
             ->latest()
             ->paginate(15);
 
@@ -110,6 +110,8 @@ class OrderController extends Controller
             'type' => $d->type,
             'value' => $d->value,
         ]);
+
+        $order->payments->each(fn ($payment) => $payment->makeHidden('gateway_response'));
 
         return response()->json([
             'success' => true,

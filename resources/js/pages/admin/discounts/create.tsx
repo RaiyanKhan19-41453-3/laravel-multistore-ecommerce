@@ -22,6 +22,7 @@ interface SelectableVariant {
     name: string;
     sku?: string;
     product_id: number;
+    product: { id: number; name: string };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -50,9 +51,9 @@ export default function DiscountCreate({
         starts_at: '',
         ends_at: '',
         usage_limit: '',
-        is_active: true,
+        is_active: true as boolean,
         priority: '0',
-        stackable: false,
+        stackable: false as boolean,
         product_ids: [] as string[],
         category_ids: [] as string[],
         brand_ids: [] as string[],

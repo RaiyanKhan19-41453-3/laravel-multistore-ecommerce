@@ -18,21 +18,25 @@ class CategorySeeder extends Seeder
 
         $sort = 0;
         foreach ($categories as $name => $children) {
-            $parent = Category::create([
-                'name' => $name,
-                'slug' => Str::slug($name),
-                'is_active' => true,
-                'sort_order' => $sort++,
-            ]);
+            $parent = Category::firstOrCreate(
+                ['slug' => Str::slug($name)],
+                [
+                    'name' => $name,
+                    'is_active' => true,
+                    'sort_order' => $sort++,
+                ]
+            );
 
             foreach ($children as $i => $childName) {
-                Category::create([
-                    'parent_id' => $parent->id,
-                    'name' => $childName,
-                    'slug' => Str::slug($childName),
-                    'is_active' => true,
-                    'sort_order' => $i,
-                ]);
+                Category::firstOrCreate(
+                    ['slug' => Str::slug($childName)],
+                    [
+                        'parent_id' => $parent->id,
+                        'name' => $childName,
+                        'is_active' => true,
+                        'sort_order' => $i,
+                    ]
+                );
             }
         }
     }

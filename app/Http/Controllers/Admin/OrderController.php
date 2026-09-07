@@ -140,6 +140,10 @@ class OrderController extends Controller
 
     public function updateShipment(Request $request, Order $order, Shipment $shipment): RedirectResponse
     {
+        if ($shipment->order_id !== $order->id) {
+            abort(422, 'Shipment does not belong to this order.');
+        }
+
         $validated = $request->validate([
             'status' => 'required|string|in:pending,picked,in_transit,out_for_delivery,delivered,failed,returned',
             'tracking_number' => 'nullable|string|max:255',
@@ -169,6 +173,10 @@ class OrderController extends Controller
 
     public function destroyShipment(Order $order, Shipment $shipment): RedirectResponse
     {
+        if ($shipment->order_id !== $order->id) {
+            abort(422, 'Shipment does not belong to this order.');
+        }
+
         $shipment->delete();
 
         return to_route('admin.orders.show', $order);

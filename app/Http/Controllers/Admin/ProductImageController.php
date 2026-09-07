@@ -76,7 +76,7 @@ class ProductImageController extends Controller
     public function store(Request $request, Product $product): RedirectResponse
     {
         $request->validate([
-            'images' => 'required|array',
+            'images' => 'required|array|max:10',
             'images.*' => 'required|file|mimes:jpeg,png,webp,gif|max:10240',
             'product_variant_id' => 'nullable|exists:product_variants,id',
         ]);

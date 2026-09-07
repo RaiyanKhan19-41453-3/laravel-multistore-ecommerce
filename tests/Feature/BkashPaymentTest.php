@@ -533,7 +533,7 @@ it('returns 404 for webhook with unknown paymentID', function () {
     $response->assertStatus(404);
 });
 
-it('returns 400 when webhook execute fails', function () {
+it('does not mark paid when webhook execute fails', function () {
     $order = createBkashOrder('pending');
     $payment = createBkashPayment($order);
     $payment->update(['gateway_transaction_id' => 'BKASH_FAIL_123']);
@@ -552,7 +552,7 @@ it('returns 400 when webhook execute fails', function () {
         'status' => 'success',
     ]);
 
-    $response->assertStatus(400);
+    $response->assertOk()->assertJson(['status' => 'ok']);
 
     $payment->refresh();
     expect($payment->status)->toBe('pending');

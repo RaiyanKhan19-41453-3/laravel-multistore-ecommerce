@@ -17,7 +17,8 @@ export default function ForgotPassword() {
     const [success, setSuccess] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const isEmail = identifier.includes('@');
+    const trimmedIdentifier = identifier.trim();
+    const isEmail = /.+@.+\..+/.test(trimmedIdentifier);
 
     const submitIdentifier = (e: React.FormEvent) => {
         e.preventDefault();
@@ -25,14 +26,14 @@ export default function ForgotPassword() {
         setError(null);
 
         void apiStore('/auth/forgot-password', {
-            body: { identifier },
+            body: { identifier: trimmedIdentifier },
         }).then((res) => {
             setBusy(false);
 
             if (res.ok) {
                 setSuccess(res.message ?? 'Check your inbox or phone for the reset instructions.');
                 if (!isEmail) {
-                    setPhone(identifier);
+                    setPhone(trimmedIdentifier);
                     setStep('otp');
                 }
             } else {
@@ -46,7 +47,7 @@ export default function ForgotPassword() {
         setBusy(true);
         setError(null);
 
-        void apiStore('/auth/verify-otp', {
+        void apiStore<{ reset_token: string; phone: string }>('/auth/verify-otp', {
             body: { phone, otp },
         }).then((res) => {
             setBusy(false);

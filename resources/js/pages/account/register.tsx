@@ -1,5 +1,6 @@
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore, setAuth, type StoreUser } from '@/lib/auth';
+import { getGuestToken } from '@/lib/guest-token';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -10,23 +11,41 @@ export default function StoreRegister() {
     const [password, setPassword] = useState('');
     const [passwordConfirmation, setPasswordConfirmation] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         setBusy(true);
         setError(null);
+        setFieldErrors({});
 
         void apiStore<{ user: StoreUser; token: string }>('/auth/register', {
             body: { name, email, phone, password, password_confirmation: passwordConfirmation },
         }).then((res) => {
-            setBusy(false);
-
             if (res.ok && res.data) {
-                setAuth(res.data.token, res.data.user);
-                router.visit('/');
+                const guestToken = getGuestToken();
+                setAuth(res.data.user);
+
+                void apiStore('/cart/merge', {
+                    body: { guest_token: guestToken },
+                }).finally(() => {
+                    setBusy(false);
+                    router.visit('/');
+                });
             } else {
+                setBusy(false);
                 setError(res.message ?? 'Registration failed.');
+
+                if (res.errors) {
+                    const mapped: Record<string, string> = {};
+
+                    for (const [field, messages] of Object.entries(res.errors)) {
+                        mapped[field] = messages[0] ?? '';
+                    }
+
+                    setFieldErrors(mapped);
+                }
             }
         });
     };
@@ -54,6 +73,7 @@ export default function StoreRegister() {
                             className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
                             placeholder="Your name"
                         />
+                        {fieldErrors.name && <p className="mt-1 text-xs text-red-500">{fieldErrors.name}</p>}
                     </div>
 
                     <div>
@@ -69,6 +89,7 @@ export default function StoreRegister() {
                             className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
                             placeholder="you@example.com"
                         />
+                        {fieldErrors.email && <p className="mt-1 text-xs text-red-500">{fieldErrors.email}</p>}
                     </div>
 
                     <div>
@@ -84,6 +105,7 @@ export default function StoreRegister() {
                             className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
                             placeholder="01XXXXXXXXX"
                         />
+                        {fieldErrors.phone && <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>}
                     </div>
 
                     <div>
@@ -99,6 +121,7 @@ export default function StoreRegister() {
                             className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
                             placeholder="Min 8 characters"
                         />
+                        {fieldErrors.password && <p className="mt-1 text-xs text-red-500">{fieldErrors.password}</p>}
                     </div>
 
                     <div>

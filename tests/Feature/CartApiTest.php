@@ -1,10 +1,13 @@
 <?php
 
 use App\Models\Cart;
+use App\Models\CartItem;
 use App\Models\Coupon;
+use App\Models\CouponRedemption;
 use App\Models\Discount;
 use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
 
 it('returns empty cart for unauthenticated guest', function () {
@@ -430,4 +433,130 @@ it('cart item removed on product force delete', function () {
     $product->forceDelete();
 
     $this->assertDatabaseMissing('cart_items', ['product_id' => $product->id]);
+});
+
+it('rejects cart item when variant does not belong to product', function () {
+    $productA = Product::factory()->create(['price' => 100, 'is_active' => true]);
+    $productB = Product::factory()->create(['price' => 200, 'is_active' => true]);
+    $variantOfB = ProductVariant::factory()->create(['product_id' => $productB->id, 'is_active' => true]);
+    Inventory::factory()->forProduct($productA)->withQuantity(50)->create();
+    Inventory::factory()->forVariant($variantOfB)->withQuantity(50)->create();
+
+    $response = $this->postJson('/api/cart/items', [
+        'product_id' => $productA->id,
+        'product_variant_id' => $variantOfB->id,
+        'quantity' => 1,
+    ], ['X-Guest-Token' => 'test-variant-mismatch']);
+
+    $response->assertStatus(422)->assertJson([
+        'success' => false,
+    ]);
+
+    $this->assertDatabaseMissing('cart_items', ['product_id' => $productA->id]);
+});
+
+it('merge does not double-reserve inventory', function () {
+    $user = User::factory()->create();
+    $product = Product::factory()->create(['price' => 100, 'is_active' => true]);
+    Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+
+    $this->postJson('/api/cart/items', [
+        'product_id' => $product->id,
+        'quantity' => 2,
+    ], ['X-Guest-Token' => 'guest-merge-reserve']);
+
+    $this->actingAs($user)
+        ->postJson('/api/cart/items', [
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]);
+
+    $this->actingAs($user)
+        ->postJson('/api/cart/merge', [
+            'guest_token' => 'guest-merge-reserve',
+        ])->assertOk();
+
+    $userCart = Cart::where('user_id', $user->id)->first();
+    $this->assertEquals(3, $userCart->items()->first()->quantity);
+
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    $this->assertEquals(3, $inventory->reserved_quantity);
+});
+
+it('rejects applying an exhausted coupon at cart time', function () {
+    $user = User::factory()->create();
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'USEDUP',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    CouponRedemption::create([
+        'coupon_id' => $coupon->id,
+        'identifier' => 'user:'.$user->id,
+        'order_id' => null,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->postJson('/api/cart/coupon', [
+            'code' => 'USEDUP',
+        ]);
+
+    $response->assertStatus(422)->assertJson([
+        'success' => false,
+        'message' => 'This coupon has already been used the maximum number of times.',
+    ]);
+});
+
+it('hides exhausted coupon discount in cart summary', function () {
+    $user = User::factory()->create();
+    $product = Product::factory()->create(['price' => 1000, 'is_active' => true]);
+    Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+
+    $discount = Discount::factory()->percentage()->create(['value' => 10, 'is_active' => true, 'coupon_only' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'SPENT10',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    CouponRedemption::create([
+        'coupon_id' => $coupon->id,
+        'identifier' => 'user:'.$user->id,
+        'order_id' => null,
+    ]);
+
+    $cart = Cart::create(['user_id' => $user->id, 'status' => 'active', 'coupon_id' => $coupon->id]);
+    CartItem::create(['cart_id' => $cart->id, 'product_id' => $product->id, 'quantity' => 1]);
+
+    $response = $this->actingAs($user)->getJson('/api/cart');
+
+    $response->assertOk()->assertJson([
+        'success' => true,
+        'data' => [
+            'discount_total' => 0,
+            'total' => 1000,
+        ],
+    ]);
+});
+
+it('treats coupon as invalid when its discount is deleted', function () {
+    $user = User::factory()->create();
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'DEADDISC',
+        'is_active' => true,
+    ]);
+    $discount->delete();
+
+    $response = $this->actingAs($user)
+        ->postJson('/api/cart/coupon', [
+            'code' => 'DEADDISC',
+        ]);
+
+    $response->assertStatus(422)->assertJson([
+        'success' => false,
+        'message' => 'Invalid or inactive coupon code.',
+    ]);
 });

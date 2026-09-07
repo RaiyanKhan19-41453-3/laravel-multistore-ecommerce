@@ -20,7 +20,7 @@ class CartService
     {
         return Cart::firstOrCreate(
             ['user_id' => $user->id, 'status' => 'active'],
-            ['status' => 'active']
+            ['status' => 'active', 'expires_at' => now()->addDays(30)]
         );
     }
 
@@ -34,10 +34,12 @@ class CartService
             return $existing;
         }
 
-        $cleared = Cart::where('guest_token', $guestToken)->first();
+        $cleared = Cart::where('guest_token', $guestToken)
+            ->whereIn('status', ['expired', 'abandoned'])
+            ->first();
 
         if ($cleared) {
-            $cleared->update(['status' => 'active']);
+            $cleared->update(['status' => 'active', 'expires_at' => now()->addDays(30)]);
 
             return $cleared;
         }
@@ -129,9 +131,11 @@ class CartService
                 $newQuantity = $existingItem->quantity + $guestItem->quantity;
 
                 try {
+                    $this->releaseGuestItemReservation($guestItem);
                     $this->updateQuantity($existingItem, $newQuantity);
                     $guestItem->delete();
                 } catch (\InvalidArgumentException) {
+                    $this->releaseGuestItemReservation($guestItem);
                     $guestItem->delete();
                 }
             } else {
@@ -158,6 +162,11 @@ class CartService
             return null;
         }
 
+        if ($cart->user_id) {
+            $identifier = $this->discountService->redemptionIdentifier($cart->user, null);
+            $this->discountService->assertCouponRedeemable($coupon, $identifier);
+        }
+
         $cart->update(['coupon_id' => $coupon->id]);
 
         return $coupon;
@@ -180,7 +189,8 @@ class CartService
             $lineTotal = $unitPrice * $item->quantity;
             $subtotal += $lineTotal;
 
-            $image = $item->product->images()->primary()->first();
+            $image = $item->product->images->firstWhere('is_primary', true)
+                ?? $item->product->images->first();
 
             $items[] = [
                 'id' => $item->id,
@@ -229,6 +239,7 @@ class CartService
             $productTotals,
             $variantIds,
             $discountItems,
+            $cart->user_id ? $this->discountService->redemptionIdentifier($cart->user, null) : null,
         );
 
         $discountTotal = 0;
@@ -245,6 +256,7 @@ class CartService
                 : $discountResult['amount'];
 
             $reducedTotals = $productTotals;
+            $itemIdToProductId = collect($discountItems)->pluck('product_id', 'cart_item_id');
 
             foreach ($discounts as $d) {
                 $perItem = $this->discountService->getPerItemDiscountAmounts(
@@ -257,7 +269,8 @@ class CartService
 
                 foreach ($perItem as $key => $info) {
                     $itemDiscountsMap[$key][] = $info;
-                    $reducedTotals[$key] = max(0, ($reducedTotals[$key] ?? 0) - $info['amount']);
+                    $pid = $itemIdToProductId[$key] ?? $key;
+                    $reducedTotals[$pid] = max(0, ($reducedTotals[$pid] ?? 0) - $info['amount']);
                 }
             }
 
@@ -309,12 +322,28 @@ class CartService
             throw new \InvalidArgumentException('Product variant is not available.');
         }
 
+        if ($variant && $variant->product_id !== $product->id) {
+            throw new \InvalidArgumentException('Product variant does not belong to this product.');
+        }
+
         if ($product->isVariable() && ! $variant) {
             throw new \InvalidArgumentException('This product requires a variant selection.');
         }
 
         if (! $product->isVariable() && $variant) {
             throw new \InvalidArgumentException('Simple products cannot have a variant.');
+        }
+    }
+
+    private function releaseGuestItemReservation(CartItem $guestItem): void
+    {
+        $guestItem->loadMissing(['product', 'productVariant']);
+
+        try {
+            $inventory = $this->getInventory($guestItem->product, $guestItem->productVariant);
+            $this->inventoryService->release($inventory, $guestItem->quantity);
+        } catch (\InvalidArgumentException) {
+            // Inventory row gone — nothing left to release.
         }
     }
 

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Coupon extends Model
@@ -16,6 +17,7 @@ class Coupon extends Model
         'code',
         'usage_limit',
         'usage_count',
+        'per_user_limit',
         'starts_at',
         'ends_at',
         'is_active',
@@ -26,6 +28,7 @@ class Coupon extends Model
         return [
             'usage_limit' => 'integer',
             'usage_count' => 'integer',
+            'per_user_limit' => 'integer',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'is_active' => 'boolean',
@@ -35,6 +38,11 @@ class Coupon extends Model
     public function discount(): BelongsTo
     {
         return $this->belongsTo(Discount::class);
+    }
+
+    public function redemptions(): HasMany
+    {
+        return $this->hasMany(CouponRedemption::class);
     }
 
     public function isActiveNow(): bool

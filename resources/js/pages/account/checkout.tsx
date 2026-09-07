@@ -1,13 +1,12 @@
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore, getUser } from '@/lib/auth';
+import { formatPrice } from '@/lib/format';
 import type { CartSummary } from '@/types';
 import { Link, router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CreditCard, Info, Truck } from 'lucide-react';
 
-function formatPrice(value: number): string {
-    return `\u09f3${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
+const BD_DIVISIONS = ['Dhaka', 'Chattogram', 'Rajshahi', 'Khulna', 'Barishal', 'Sylhet', 'Rangpur', 'Mymensingh'];
 
 interface PaymentMethodOption {
     value: string;
@@ -73,6 +72,7 @@ export default function Checkout() {
     const [shippingLoading, setShippingLoading] = useState(false);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
     const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const ratesRequestId = useRef(0);
 
     const fetchCart = () => {
         void apiStore<CartSummary>('/cart').then((res) => {
@@ -96,13 +96,19 @@ export default function Checkout() {
         fetchCities();
 
         void apiStore<{ methods: PaymentMethodOption[] }>('/payment-methods').then((res) => {
-            if (res.ok && res.data?.methods) {
-                setPaymentMethods(res.data.methods);
+            const methods = res.ok ? (res.data?.methods ?? []) : [];
 
-                setForm((prev) => ({
-                    ...prev,
-                    payment_method: prev.payment_method || res.data.methods[0]?.value || 'cod',
-                }));
+            if (methods.length > 0) {
+                setPaymentMethods(methods);
+
+                setForm((prev) => {
+                    const stillEnabled = methods.some((m) => m.value === prev.payment_method);
+
+                    return {
+                        ...prev,
+                        payment_method: stillEnabled ? prev.payment_method : (methods[0]?.value ?? 'cod'),
+                    };
+                });
             }
         });
     }, []);
@@ -125,7 +131,7 @@ export default function Checkout() {
     };
 
     const checkEmail = useCallback((email: string) => {
-        if (emailChecked || !email || user) {
+        if (!email || user) {
             return;
         }
 
@@ -137,7 +143,13 @@ export default function Checkout() {
             }
             setEmailChecked(true);
         });
-    }, [emailChecked, user]);
+    }, [user]);
+
+    const handleEmailChange = (value: string) => {
+        setField('guest_email', value);
+        setEmailChecked(false);
+        setAccountNudge(false);
+    };
 
     const handleEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
         const email = e.target.value.trim();
@@ -154,21 +166,48 @@ export default function Checkout() {
         setSelectedRateId(null);
         setShippingRates([]);
         if (value) {
-            setShippingLoading(true);
-            const subtotal = cart?.subtotal ?? 0;
-            void apiStore<ShippingRateOption[]>(`/shipping/rates?city=${encodeURIComponent(value)}&subtotal=${subtotal}`).then((res) => {
-                if (res.ok && res.data) {
-                    setShippingRates(res.data);
-                    if (res.data.length === 1) {
-                        setSelectedRateId(res.data[0].id);
-                    }
-                } else {
-                    setShippingRates([]);
-                }
-                setShippingLoading(false);
-            });
+            fetchRates(value, cart?.subtotal ?? 0);
         }
     };
+
+    const fetchRates = (city: string, subtotal: number) => {
+        const requestId = ++ratesRequestId.current;
+        setShippingLoading(true);
+        void apiStore<ShippingRateOption[]>(`/shipping/rates?city=${encodeURIComponent(city)}&subtotal=${subtotal}`).then((res) => {
+            if (requestId !== ratesRequestId.current) {
+                return;
+            }
+
+            if (!res.ok || !res.data) {
+                setShippingRates([]);
+                setSelectedRateId(null);
+                setShippingLoading(false);
+
+                return;
+            }
+
+            const rates = res.data;
+            setShippingRates(rates);
+
+            setSelectedRateId((prev) => {
+                if (prev !== null && rates.some((rate) => rate.id === prev)) {
+                    return prev;
+                }
+
+                return rates.length === 1 ? rates[0].id : null;
+            });
+            setShippingLoading(false);
+        });
+    };
+
+    const cartSubtotal = cart?.subtotal ?? 0;
+
+    useEffect(() => {
+        if (form.shipping_city) {
+            fetchRates(form.shipping_city, cartSubtotal);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cartSubtotal]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -215,15 +254,48 @@ export default function Checkout() {
             body.guest_email = form.guest_email;
         }
 
-        void apiStore<{ order: { id: number; order_number: string; status: string; total: number } }>('/checkout', {
+        void apiStore<{
+            order: { id: number; order_number: string; status: string; total: number };
+            payment?: { id: number; redirect_url: string | null };
+        }>('/checkout', {
             body,
         }).then((res) => {
             setSubmitting(false);
 
             if (res.ok && res.data) {
-                router.visit(`/order-confirmation/${res.data.order.order_number}`);
+                const redirectUrl = res.data.payment?.redirect_url;
+
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+
+                    return;
+                }
+
+                const params = new URLSearchParams();
+
+                if (form.guest_email) {
+                    params.set('email', form.guest_email);
+                }
+
+                if (form.phone) {
+                    params.set('phone', form.phone);
+                }
+
+                const query = params.toString();
+
+                router.visit(`/order-confirmation/${res.data.order.order_number}${query ? `?${query}` : ''}`);
             } else {
                 setError(res.message ?? 'Checkout failed. Please try again.');
+
+                if (res.errors) {
+                    const mapped: Record<string, string> = {};
+
+                    for (const [field, messages] of Object.entries(res.errors)) {
+                        mapped[field] = messages[0] ?? '';
+                    }
+
+                    setFieldErrors(mapped);
+                }
             }
         });
     };
@@ -284,7 +356,7 @@ export default function Checkout() {
                                             type="email"
                                             required
                                             value={form.guest_email}
-                                            onChange={(e) => setField('guest_email', e.target.value)}
+                                            onChange={(e) => handleEmailChange(e.target.value)}
                                             onBlur={handleEmailBlur}
                                             className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
                                             placeholder="you@example.com"
@@ -424,6 +496,19 @@ export default function Checkout() {
                                         {fieldErrors.shipping_city && (
                                             <p className="mt-1 text-xs text-red-500">{fieldErrors.shipping_city}</p>
                                         )}
+                                        </div>
+                                        <div>
+                                            <label className="mb-1 block text-sm font-medium">Division</label>
+                                            <select
+                                                value={form.shipping_state}
+                                                onChange={(e) => setField('shipping_state', e.target.value)}
+                                                className="w-full rounded-md border border-[var(--store-border)] bg-white px-3 py-2 text-sm dark:bg-[var(--store-card)]"
+                                            >
+                                                <option value="">Select a division (optional)</option>
+                                                {BD_DIVISIONS.map((division) => (
+                                                    <option key={division} value={division}>{division}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div>
                                             <label className="mb-1 block text-sm font-medium">Postal Code</label>

@@ -1,16 +1,15 @@
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore } from '@/lib/auth';
+import { formatPrice } from '@/lib/format';
 import type { CartDiscount, CartSummary, ItemDiscount } from '@/types';
 import { Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { Check, Minus, Plus, Tag, Trash2 } from 'lucide-react';
 
-function formatPrice(value: number): string {
-    return `৳${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-
 function discountRate(d: CartDiscount | ItemDiscount): string {
-    return d.type === 'percentage' ? `${d.value ?? d.amount}%` : formatPrice(d.amount);
+    const value = 'value' in d ? (d.value ?? d.amount) : d.amount;
+
+    return d.type === 'percentage' ? `${value}%` : formatPrice(d.amount);
 }
 
 function levelTag(d: CartDiscount | ItemDiscount): string {
@@ -108,7 +107,7 @@ export default function StoreCart() {
                     <h1 className="mb-4 text-2xl font-bold">Your cart is empty</h1>
                     <p className="mb-6 text-[var(--store-muted)]">Looks like you haven&apos;t added anything yet.</p>
                     <Link
-                        href="/"
+                        href="/products"
                         className="inline-block rounded-lg bg-[var(--store-accent)] px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
                     >
                         Continue shopping

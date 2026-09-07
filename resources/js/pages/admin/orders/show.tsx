@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
+import { formatPrice } from '@/lib/format';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Package, Pencil, Truck, XCircle } from 'lucide-react';
@@ -88,10 +89,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const STATUS_FLOW: Record<string, string[]> = {
-    pending: ['confirmed', 'cancelled'],
+    pending: ['confirmed', 'cancelled', 'expired'],
     confirmed: ['processing', 'cancelled'],
     processing: ['shipped', 'cancelled'],
-    shipped: ['delivered'],
+    shipped: ['delivered', 'cancelled'],
     delivered: ['completed'],
 };
 
@@ -216,7 +217,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                                 Advance Status
                             </Button>
                         )}
-                        {['pending', 'confirmed'].includes(order.status) && (
+                        {['pending', 'confirmed', 'processing', 'shipped'].includes(order.status) && (
                             <Button size="sm" variant="destructive" onClick={() => setShowCancelDialog(true)}>
                                 <XCircle className="mr-2 h-4 w-4" />
                                 Cancel
@@ -237,10 +238,10 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                                         <div>
                                             <p className="font-medium">{item.name}</p>
                                             <p className="text-sm text-neutral-500">
-                                                SKU: {item.sku} &middot; ৳{Number(item.unit_price).toLocaleString()} &times; {item.quantity}
+                                                SKU: {item.sku} &middot; {formatPrice(item.unit_price)} &times; {item.quantity}
                                             </p>
                                         </div>
-                                        <p className="font-medium">৳{Number(item.total).toLocaleString()}</p>
+                                        <p className="font-medium">{formatPrice(item.total)}</p>
                                     </div>
                                 ))}
                             </div>
@@ -333,29 +334,29 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                             <div className="space-y-2 px-4 py-3 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-neutral-500">Subtotal</span>
-                                    <span>৳{Number(order.subtotal).toLocaleString()}</span>
+                                    <span>{formatPrice(order.subtotal)}</span>
                                 </div>
                                 {Number(order.discount_total) > 0 && (
                                     <div className="flex justify-between text-emerald-600">
                                         <span>Discount</span>
-                                        <span>-৳{Number(order.discount_total).toLocaleString()}</span>
+                                        <span>-{formatPrice(order.discount_total)}</span>
                                     </div>
                                 )}
                                 {Number(order.shipping_cost) > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-neutral-500">Shipping</span>
-                                        <span>৳{Number(order.shipping_cost).toLocaleString()}</span>
+                                        <span>{formatPrice(order.shipping_cost)}</span>
                                     </div>
                                 )}
                                 {Number(order.tax_amount) > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-neutral-500">Tax</span>
-                                        <span>৳{Number(order.tax_amount).toLocaleString()}</span>
+                                        <span>{formatPrice(order.tax_amount)}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between border-t border-neutral-200 pt-2 font-semibold dark:border-neutral-800">
                                     <span>Total</span>
-                                    <span>৳{Number(order.total).toLocaleString()}</span>
+                                    <span>{formatPrice(order.total)}</span>
                                 </div>
                             </div>
                         </div>

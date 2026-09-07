@@ -16,6 +16,7 @@ interface Coupon {
     code: string;
     usage_limit: number | null;
     usage_count: number;
+    per_user_limit: number | null;
     starts_at: string | null;
     ends_at: string | null;
     is_active: boolean;
@@ -54,6 +55,7 @@ function CouponForm({ discount, coupon, onClose }: { discount: Discount; coupon?
     const { data, setData, post, put, errors, processing } = useForm({
         code: coupon?.code ?? '',
         usage_limit: coupon?.usage_limit?.toString() ?? '',
+        per_user_limit: coupon ? (coupon.per_user_limit?.toString() ?? '') : '1',
         starts_at: coupon?.starts_at ? coupon.starts_at.slice(0, 16) : '',
         ends_at: coupon?.ends_at ? coupon.ends_at.slice(0, 16) : '',
         is_active: coupon?.is_active ?? true,
@@ -83,6 +85,12 @@ function CouponForm({ discount, coupon, onClose }: { discount: Discount; coupon?
             <div className="grid gap-2">
                 <Label htmlFor="usage_limit">Usage Limit (optional)</Label>
                 <Input id="usage_limit" type="number" min="1" value={data.usage_limit} onChange={(e) => setData('usage_limit', e.target.value)} placeholder="Unlimited" className="w-48" />
+            </div>
+
+            <div className="grid gap-2">
+                <Label htmlFor="per_user_limit">Per-Customer Limit (optional)</Label>
+                <Input id="per_user_limit" type="number" min="1" value={data.per_user_limit} onChange={(e) => setData('per_user_limit', e.target.value)} placeholder="Blank = unlimited" className="w-48" />
+                {errors.per_user_limit && <p className="text-sm text-red-500">{errors.per_user_limit}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -279,6 +287,7 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
                             <tr>
                                 <th className="px-4 py-3 text-left font-medium">Code</th>
                                 <th className="px-4 py-3 text-left font-medium">Usage</th>
+                                <th className="px-4 py-3 text-left font-medium">Per Customer</th>
                                 <th className="px-4 py-3 text-left font-medium">Valid Period</th>
                                 <th className="px-4 py-3 text-left font-medium">Status</th>
                                 <th className="px-4 py-3 text-right font-medium">Actions</th>
@@ -287,7 +296,7 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
                         <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
                             {discount.coupons.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-500">
+                                    <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
                                         No coupons yet. Add a coupon code for this discount.
                                     </td>
                                 </tr>
@@ -297,6 +306,9 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
                                         <td className="px-4 py-3 font-mono font-medium">{coupon.code}</td>
                                         <td className="px-4 py-3 text-neutral-500">
                                             {coupon.usage_count}{coupon.usage_limit !== null ? ` / ${coupon.usage_limit}` : ''}
+                                        </td>
+                                        <td className="px-4 py-3 text-neutral-500">
+                                            {coupon.per_user_limit !== null ? `${coupon.per_user_limit}×` : 'Unlimited'}
                                         </td>
                                         <td className="px-4 py-3 text-neutral-500">
                                             {coupon.starts_at ? new Date(coupon.starts_at).toLocaleDateString() : '—'}

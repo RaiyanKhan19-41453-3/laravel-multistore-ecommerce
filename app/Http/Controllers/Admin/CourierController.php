@@ -75,6 +75,7 @@ class CourierController extends Controller
             'settings.user_id' => 'nullable|string|max:255',
             'settings.booking_branch' => 'nullable|string|max:255',
             'settings.booking_user_id' => 'nullable|string|max:255',
+            'settings.webhook_secret' => 'nullable|string|max:255',
             'settings.sandbox' => 'boolean',
         ]);
 

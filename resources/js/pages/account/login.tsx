@@ -1,5 +1,6 @@
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore, setAuth, type StoreUser } from '@/lib/auth';
+import { getGuestToken } from '@/lib/guest-token';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -10,7 +11,8 @@ export default function StoreLogin() {
     const [busy, setBusy] = useState(false);
 
     const params = new URLSearchParams(window.location.search);
-    const redirectTo = params.get('redirect') || '/';
+    const requestedRedirect = params.get('redirect') || '/';
+    const redirectTo = requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//') ? requestedRedirect : '/';
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,12 +22,18 @@ export default function StoreLogin() {
         void apiStore<{ user: StoreUser; token: string }>('/auth/login', {
             body: { identifier, password },
         }).then((res) => {
-            setBusy(false);
-
             if (res.ok && res.data) {
-                setAuth(res.data.token, res.data.user);
-                router.visit(redirectTo);
+                const guestToken = getGuestToken();
+                setAuth(res.data.user);
+
+                void apiStore('/cart/merge', {
+                    body: { guest_token: guestToken },
+                }).finally(() => {
+                    setBusy(false);
+                    router.visit(redirectTo);
+                });
             } else {
+                setBusy(false);
                 setError(res.message ?? 'Invalid credentials.');
             }
         });

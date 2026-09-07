@@ -21,21 +21,24 @@ class AttributeSeeder extends Seeder
 
         $sort = 0;
         foreach ($attributes as $name => $values) {
-            $attribute = Attribute::create([
-                'name' => $name,
-                'slug' => Str::slug($name),
-                'is_active' => true,
-                'sort_order' => $sort++,
-            ]);
+            $attribute = Attribute::firstOrCreate(
+                ['slug' => Str::slug($name)],
+                [
+                    'name' => $name,
+                    'is_active' => true,
+                    'sort_order' => $sort++,
+                ]
+            );
 
             foreach ($values as $i => $value) {
-                AttributeValue::create([
-                    'attribute_id' => $attribute->id,
-                    'value' => $value,
-                    'slug' => Str::slug($value),
-                    'is_active' => true,
-                    'sort_order' => $i,
-                ]);
+                AttributeValue::firstOrCreate(
+                    ['attribute_id' => $attribute->id, 'slug' => Str::slug($value)],
+                    [
+                        'value' => $value,
+                        'is_active' => true,
+                        'sort_order' => $i,
+                    ]
+                );
             }
         }
     }

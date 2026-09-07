@@ -5,8 +5,11 @@ namespace App\Services;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\CouponRedemption;
 use App\Models\Discount;
+use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -105,7 +108,7 @@ class DiscountService
             return null;
         }
 
-        if (! $coupon->discount->isActiveNow()) {
+        if (! $coupon->discount || ! $coupon->discount->isActiveNow()) {
             return null;
         }
 
@@ -120,7 +123,8 @@ class DiscountService
             return true;
         }
 
-        return $discount->where('usage_count', '<', $discount->usage_limit)
+        return Discount::whereKey($discount->id)
+            ->where('usage_count', '<', $discount->usage_limit)
             ->increment('usage_count') > 0;
     }
 
@@ -141,7 +145,8 @@ class DiscountService
             return true;
         }
 
-        return $coupon->where('usage_count', '<', $coupon->usage_limit)
+        return Coupon::whereKey($coupon->id)
+            ->where('usage_count', '<', $coupon->usage_limit)
             ->increment('usage_count') > 0;
     }
 
@@ -152,6 +157,64 @@ class DiscountService
         }
 
         return $coupon->decrement('usage_count') !== false;
+    }
+
+    public function redemptionIdentifier(?User $user, ?string $guestEmail): ?string
+    {
+        if ($user) {
+            return 'user:'.$user->id;
+        }
+
+        if ($guestEmail) {
+            return 'guest:'.strtolower(trim($guestEmail));
+        }
+
+        return null;
+    }
+
+    public function assertCouponRedeemable(Coupon $coupon, ?string $identifier): void
+    {
+        if ($identifier === null || $coupon->per_user_limit === null) {
+            return;
+        }
+
+        // Re-read under lock so concurrent checkouts serialize on the coupon
+        // row. Must run inside the order transaction to hold the lock.
+        $coupon = Coupon::lockForUpdate()->find($coupon->id) ?? $coupon;
+
+        if ($this->countCouponRedemptions($coupon, $identifier) >= $coupon->per_user_limit) {
+            throw new \InvalidArgumentException('This coupon has already been used the maximum number of times.');
+        }
+    }
+
+    public function countCouponRedemptions(Coupon $coupon, string $identifier): int
+    {
+        return CouponRedemption::where('coupon_id', $coupon->id)
+            ->where('identifier', $identifier)
+            ->count();
+    }
+
+    public function reserveCouponRedemption(Coupon $coupon, string $identifier, int $orderId): void
+    {
+        CouponRedemption::create([
+            'coupon_id' => $coupon->id,
+            'identifier' => $identifier,
+            'order_id' => $orderId,
+        ]);
+    }
+
+    public function releaseCouponRedemptionsForOrder(Order $order): void
+    {
+        if (! $order->coupon_id) {
+            return;
+        }
+
+        $identifier = $this->redemptionIdentifier($order->user, $order->guest_email);
+
+        CouponRedemption::where('coupon_id', $order->coupon_id)
+            ->when($identifier, fn ($q) => $q->where('identifier', $identifier))
+            ->where('order_id', $order->id)
+            ->delete();
     }
 
     public function bestDiscountForProduct(Product $product, float $subtotal): ?array
@@ -166,6 +229,10 @@ class DiscountService
             $amount = $discount->getEffectiveDiscount($subtotal);
             $priority = $discount->priority ?? 0;
 
+            if ($amount <= 0) {
+                continue;
+            }
+
             if ($priority > $bestPriority || ($priority === $bestPriority && $amount > $bestAmount)) {
                 $bestPriority = $priority;
                 $bestAmount = $amount;
@@ -179,7 +246,7 @@ class DiscountService
         return $best;
     }
 
-    public function bestDiscountForOrder(float $subtotal, ?string $couponCode = null, array $productIds = [], array $productTotals = [], array $variantIds = [], array $items = []): ?array
+    public function bestDiscountForOrder(float $subtotal, ?string $couponCode = null, array $productIds = [], array $productTotals = [], array $variantIds = [], array $items = [], ?string $couponIdentifier = null): ?array
     {
         $now = now();
 
@@ -187,6 +254,12 @@ class DiscountService
         $couponDiscountId = null;
         if ($couponCode) {
             $coupon = $this->applyCoupon($couponCode);
+
+            if ($coupon && $couponIdentifier !== null && $coupon->per_user_limit !== null
+                && $this->countCouponRedemptions($coupon, $couponIdentifier) >= $coupon->per_user_limit) {
+                $coupon = null;
+            }
+
             if ($coupon) {
                 $couponDiscountId = $coupon->discount_id;
             }
@@ -242,6 +315,10 @@ class DiscountService
             $amount = $discount->getEffectiveDiscount($eligibleSubtotal);
             $priority = $discount->priority ?? 0;
 
+            if ($amount <= 0) {
+                continue;
+            }
+
             if ($priority > $bestAutoPriority || ($priority === $bestAutoPriority && $amount > $bestAutoAmount)) {
                 $bestAutoPriority = $priority;
                 $bestAutoAmount = $amount;
@@ -256,7 +333,10 @@ class DiscountService
 
         if ($coupon) {
             $reducedSubtotal = max(0, $subtotal - ($bestAutomatic['amount'] ?? 0));
-            $amount = $coupon->discount->getEffectiveDiscount($reducedSubtotal);
+            $couponEligibleSubtotal = $this->getEligibleSubtotal(
+                $coupon->discount, $productIds, $productTotals, $reducedSubtotal, $variantIds, $items
+            );
+            $amount = $coupon->discount->getEffectiveDiscount($couponEligibleSubtotal);
 
             if ($amount > 0) {
                 $couponDiscount = [
@@ -268,11 +348,24 @@ class DiscountService
         }
 
         if ($couponDiscount && $bestAutomatic) {
-            return [
-                'discounts' => [$bestAutomatic, $couponDiscount],
-                'total_amount' => round($bestAutomatic['amount'] + $couponDiscount['amount'], 2),
-                'stacked' => true,
-            ];
+            $autoStackable = (bool) $bestAutomatic['discount']->stackable;
+            $couponStackable = (bool) $couponDiscount['discount']->stackable;
+
+            if ($autoStackable && $couponStackable) {
+                return [
+                    'discounts' => [$bestAutomatic, $couponDiscount],
+                    'total_amount' => round($bestAutomatic['amount'] + $couponDiscount['amount'], 2),
+                    'stacked' => true,
+                ];
+            }
+
+            // Not stackable: the better deal wins. Coupon wins ties as the
+            // explicit customer choice.
+            if ($couponDiscount['amount'] >= $bestAutomatic['amount']) {
+                return $couponDiscount;
+            }
+
+            return $bestAutomatic;
         }
 
         return $couponDiscount ?? $bestAutomatic;
@@ -286,18 +379,17 @@ class DiscountService
             return [];
         }
 
-        $level = $this->getDiscountLevel($discount);
-        $target = $this->getDiscountTarget($discount);
+        $targeting = $this->getTargeting($discount);
+        $level = $targeting['level'];
+        $target = $targeting['target'];
 
         $totalAmount = $discount->getEffectiveDiscount($eligibleSubtotal);
         if ($totalAmount <= 0) {
             return [];
         }
 
-        $hasVariantTargets = $discount->productVariants()->exists();
-        $discountVariantIds = $hasVariantTargets
-            ? $discount->productVariants()->pluck('product_variants.id')->toArray()
-            : [];
+        $hasVariantTargets = ! empty($targeting['variant_ids']);
+        $discountVariantIds = $targeting['variant_ids'];
 
         $perItem = [];
 
@@ -347,26 +439,55 @@ class DiscountService
                 return [];
             }
 
-            foreach ($eligibleProductIds as $pid) {
-                $productTotal = $productTotals[$pid] ?? 0;
-                if ($productTotal <= 0) {
-                    continue;
-                }
+            if (! empty($items)) {
+                foreach ($items as $item) {
+                    if (! in_array($item['product_id'] ?? null, $eligibleProductIds)) {
+                        continue;
+                    }
 
-                if ($discount->type === 'percentage') {
-                    $amount = $productTotal * ((float) $discount->value / 100);
-                } else {
-                    $amount = ($productTotal / $eligibleSubtotal) * (float) $discount->value;
-                }
+                    $itemTotal = $item['total'];
+                    if ($itemTotal <= 0) {
+                        continue;
+                    }
 
-                $perItem[$pid] = [
-                    'id' => $discount->id,
-                    'name' => $discount->name,
-                    'type' => $discount->type,
-                    'level' => $level,
-                    'target' => $target,
-                    'amount' => round($amount, 2),
-                ];
+                    if ($discount->type === 'percentage') {
+                        $amount = $itemTotal * ((float) $discount->value / 100);
+                    } else {
+                        $amount = ($itemTotal / $eligibleSubtotal) * (float) $discount->value;
+                    }
+
+                    $key = $item['cart_item_id'] ?? $item['product_id'];
+                    $perItem[$key] = [
+                        'id' => $discount->id,
+                        'name' => $discount->name,
+                        'type' => $discount->type,
+                        'level' => $level,
+                        'target' => $target,
+                        'amount' => round($amount, 2),
+                    ];
+                }
+            } else {
+                foreach ($eligibleProductIds as $pid) {
+                    $productTotal = $productTotals[$pid] ?? 0;
+                    if ($productTotal <= 0) {
+                        continue;
+                    }
+
+                    if ($discount->type === 'percentage') {
+                        $amount = $productTotal * ((float) $discount->value / 100);
+                    } else {
+                        $amount = ($productTotal / $eligibleSubtotal) * (float) $discount->value;
+                    }
+
+                    $perItem[$pid] = [
+                        'id' => $discount->id,
+                        'name' => $discount->name,
+                        'type' => $discount->type,
+                        'level' => $level,
+                        'target' => $target,
+                        'amount' => round($amount, 2),
+                    ];
+                }
             }
         }
 
@@ -384,45 +505,68 @@ class DiscountService
 
     public function getDiscountLevel(Discount $discount): string
     {
-        if ($discount->products()->exists()) {
-            return 'product';
-        }
-
-        if ($discount->productVariants()->exists()) {
-            return 'variant';
-        }
-
-        if ($discount->categories()->exists()) {
-            return 'category';
-        }
-
-        if ($discount->brands()->exists()) {
-            return 'brand';
-        }
-
-        return 'sitewide';
+        return $this->getTargeting($discount)['level'];
     }
 
     public function getDiscountTarget(Discount $discount): ?string
     {
-        return match ($this->getDiscountLevel($discount)) {
-            'category' => $discount->categories()->first()?->name,
-            'brand' => $discount->brands()->first()?->name,
-            'variant' => $discount->productVariants()->first()?->name,
-            default => null,
-        };
+        return $this->getTargeting($discount)['target'];
+    }
+
+    /**
+     * Load a discount's targeting relations once and derive its level,
+     * display target, and variant ids from the loaded collections.
+     * Repeated calls reuse the loaded relations — no extra queries.
+     *
+     * @return array{level: string, target: ?string, variant_ids: int[]}
+     */
+    public function getTargeting(Discount $discount): array
+    {
+        $discount->loadMissing(['products', 'productVariants', 'categories', 'brands']);
+
+        if ($discount->products->isNotEmpty()) {
+            return ['level' => 'product', 'target' => null, 'variant_ids' => []];
+        }
+
+        if ($discount->productVariants->isNotEmpty()) {
+            return [
+                'level' => 'variant',
+                'target' => $discount->productVariants->first()->name,
+                'variant_ids' => $discount->productVariants->pluck('id')->all(),
+            ];
+        }
+
+        if ($discount->categories->isNotEmpty()) {
+            return [
+                'level' => 'category',
+                'target' => $discount->categories->first()->name,
+                'variant_ids' => [],
+            ];
+        }
+
+        if ($discount->brands->isNotEmpty()) {
+            return [
+                'level' => 'brand',
+                'target' => $discount->brands->first()->name,
+                'variant_ids' => [],
+            ];
+        }
+
+        return ['level' => 'sitewide', 'target' => null, 'variant_ids' => []];
     }
 
     private function getEligibleProductIds(Discount $discount, array $productIds, array $variantIds = []): array
     {
+        $discount->loadMissing(['products', 'categories', 'brands']);
+
         $eligibleProductIds = [];
 
-        $discountProductIds = $discount->products()->pluck('products.id')->toArray();
+        $discountProductIds = $discount->products->pluck('id')->toArray();
         if (! empty($discountProductIds)) {
             $eligibleProductIds = array_merge($eligibleProductIds, array_intersect($productIds, $discountProductIds));
         }
 
-        $discountCategoryIds = $discount->categories()->pluck('categories.id')->toArray();
+        $discountCategoryIds = $discount->categories->pluck('id')->toArray();
         if (! empty($discountCategoryIds)) {
             $categoryProductIds = DB::table('category_product')
                 ->whereIn('category_id', $discountCategoryIds)
@@ -432,7 +576,7 @@ class DiscountService
             $eligibleProductIds = array_merge($eligibleProductIds, $categoryProductIds);
         }
 
-        $discountBrandIds = $discount->brands()->pluck('brands.id')->toArray();
+        $discountBrandIds = $discount->brands->pluck('id')->toArray();
         if (! empty($discountBrandIds)) {
             $brandProductIds = DB::table('products')
                 ->whereIn('brand_id', $discountBrandIds)
@@ -451,10 +595,11 @@ class DiscountService
             return $fallbackSubtotal;
         }
 
-        $hasVariantTargets = $discount->productVariants()->exists();
+        $discount->loadMissing('productVariants');
+        $hasVariantTargets = $discount->productVariants->isNotEmpty();
 
         if ($hasVariantTargets && ! empty($items)) {
-            $discountVariantIds = $discount->productVariants()->pluck('product_variants.id')->toArray();
+            $discountVariantIds = $discount->productVariants->pluck('id')->toArray();
             $eligibleSubtotal = 0;
             foreach ($items as $item) {
                 if (in_array($item['variant_id'] ?? null, $discountVariantIds)) {

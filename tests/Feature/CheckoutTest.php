@@ -2,12 +2,11 @@
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Coupon;
+use App\Models\CouponRedemption;
+use App\Models\Discount;
 use App\Models\Inventory;
 use App\Models\Order;
-use App\Models\Product;
-use App\Models\ShippingMethod;
-use App\Models\ShippingRate;
-use App\Models\ShippingZone;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 
@@ -18,72 +17,6 @@ beforeEach(function () {
         'payment.enabled.cod' => true,
     ]);
 });
-
-function createUser(): User
-{
-    return User::factory()->create();
-}
-
-function authHeaders(User $user): array
-{
-    $token = $user->createToken('test-token')->plainTextToken;
-
-    return ['Authorization' => "Bearer $token"];
-}
-
-function createProduct(float $price = 500, int $stock = 50): Product
-{
-    $product = Product::factory()->create(['price' => $price, 'is_active' => true]);
-    Inventory::factory()->forProduct($product)->withQuantity($stock)->create();
-
-    return $product;
-}
-
-function createCartWithItem(User $user, Product $product, int $quantity = 1): Cart
-{
-    $cart = Cart::create([
-        'user_id' => $user->id,
-        'status' => 'active',
-    ]);
-
-    CartItem::create([
-        'cart_id' => $cart->id,
-        'product_id' => $product->id,
-        'quantity' => $quantity,
-    ]);
-
-    return $cart;
-}
-
-function createTestShippingRate(): ShippingRate
-{
-    $method = ShippingMethod::firstOrCreate(['name' => 'Standard'], ['is_active' => true, 'estimated_days' => 5]);
-    $zone = ShippingZone::firstOrCreate(['name' => 'Dhaka'], [
-        'cities' => ['Dhaka'],
-        'is_fallback' => false,
-        'is_active' => true,
-    ]);
-
-    return ShippingRate::firstOrCreate(
-        ['shipping_method_id' => $method->id, 'shipping_zone_id' => $zone->id],
-        ['price' => 60, 'free_shipping_min' => null]
-    );
-}
-
-function shippingData(): array
-{
-    $rate = createTestShippingRate();
-
-    return [
-        'shipping_name' => 'Test User',
-        'phone' => '01712345678',
-        'shipping_address' => '123 Test Street',
-        'shipping_city' => 'Dhaka',
-        'shipping_state' => 'Dhaka',
-        'shipping_country' => 'Bangladesh',
-        'shipping_rate_id' => $rate->id,
-    ];
-}
 
 it('can checkout with cod', function () {
     $user = createUser();
@@ -543,6 +476,35 @@ it('deducts stock for cod order', function () {
     expect($inventory->reserved_quantity)->toBe(0);
 });
 
+it('allows checkout of exact remaining stock without double-reserving', function () {
+
+    $user = createUser();
+    $product = createProduct(500, 3);
+
+    $this->postJson('/api/cart/items', [
+        'product_id' => $product->id,
+        'quantity' => 3,
+    ], authHeaders($user))->assertOk();
+
+    expect(Inventory::where('product_id', $product->id)->first()->reserved_quantity)->toBe(3);
+
+    $response = $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user));
+
+    $response->assertOk()->assertJson([
+        'success' => true,
+        'data' => [
+            'order' => ['status' => 'confirmed'],
+        ],
+    ]);
+
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    expect($inventory->quantity)->toBe(0);
+    expect($inventory->reserved_quantity)->toBe(0);
+});
+
 it('rejects invalid payment method', function () {
     $user = createUser();
     $product = createProduct(500, 20);
@@ -612,4 +574,207 @@ it('defaults phone to user phone for logged-in user', function () {
     $order = Order::where('user_id', $user->id)->first();
     expect($order)->not->toBeNull();
     expect($order->shipping_phone)->toBe('01999888777');
+});
+
+it('does not burn redemption when coupon gives no discount', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create([
+        'value' => 50,
+        'minimum_order_amount' => 5000,
+        'is_active' => true,
+    ]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'TOOHIGH',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    foreach ([1, 2] as $i) {
+        $cart = createCartWithItem($user, $product, 1);
+        $cart->update(['coupon_id' => $coupon->id]);
+
+        $this->postJson('/api/checkout', [
+            ...shippingData(),
+            'payment_method' => 'cod',
+        ], authHeaders($user))->assertOk();
+    }
+
+    expect(CouponRedemption::where('coupon_id', $coupon->id)->count())->toBe(0);
+});
+
+it('blocks a second order reusing a single-use coupon', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'ONCEONLY',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    $cart = createCartWithItem($user, $product, 1);
+    $cart->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    $cart2 = createCartWithItem($user, $product, 1);
+    $cart2->update(['coupon_id' => $coupon->id]);
+
+    $response = $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user));
+
+    $response->assertStatus(422)->assertJson([
+        'success' => false,
+        'message' => 'This coupon has already been used the maximum number of times.',
+    ]);
+});
+
+it('allows a different user to reuse the same coupon', function () {
+    $userA = createUser();
+    $userB = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'SHARED10',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    $cartA = createCartWithItem($userA, $product, 1);
+    $cartA->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($userA))->assertOk();
+
+    $cartB = createCartWithItem($userB, $product, 1);
+    $cartB->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($userB))->assertOk();
+});
+
+it('respects per_user_limit greater than one', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'TWICEONLY',
+        'is_active' => true,
+        'per_user_limit' => 2,
+    ]);
+
+    foreach ([1, 2] as $i) {
+        $cart = createCartWithItem($user, $product, 1);
+        $cart->update(['coupon_id' => $coupon->id]);
+
+        $this->postJson('/api/checkout', [
+            ...shippingData(),
+            'payment_method' => 'cod',
+        ], authHeaders($user))->assertOk();
+    }
+
+    $cart3 = createCartWithItem($user, $product, 1);
+    $cart3->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertStatus(422);
+});
+
+it('releases coupon redemption when order is cancelled', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'REUSABLE',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    $cart = createCartWithItem($user, $product, 1);
+    $cart->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    $order = Order::where('user_id', $user->id)->first();
+
+    $this->actingAs($user)->postJson("/api/orders/{$order->id}/cancel")->assertOk();
+
+    $cart2 = createCartWithItem($user, $product, 1);
+    $cart2->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+});
+
+it('keys guest coupon redemptions by email', function () {
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'GUESTONCE',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    $cart = Cart::create(['status' => 'active', 'guest_token' => 'guest-coupon-1']);
+    CartItem::create(['cart_id' => $cart->id, 'product_id' => $product->id, 'quantity' => 1]);
+    $cart->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+        'guest_email' => 'guestonce@example.com',
+    ], ['X-Guest-Token' => 'guest-coupon-1'])->assertOk();
+
+    $cart2 = Cart::create(['status' => 'active', 'guest_token' => 'guest-coupon-2']);
+    CartItem::create(['cart_id' => $cart2->id, 'product_id' => $product->id, 'quantity' => 1]);
+    $cart2->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+        'guest_email' => 'guestonce@example.com',
+    ], ['X-Guest-Token' => 'guest-coupon-2'])->assertStatus(422);
+});
+
+it('does not increment global usage when coupon gives no discount', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->fixed()->create([
+        'value' => 50,
+        'minimum_order_amount' => 5000,
+        'is_active' => true,
+    ]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'NOBENEFIT',
+        'is_active' => true,
+        'per_user_limit' => 1,
+    ]);
+
+    $cart = createCartWithItem($user, $product, 1);
+    $cart->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    expect($coupon->fresh()->usage_count)->toBe(0);
+    expect($discount->fresh()->usage_count)->toBe(0);
 });

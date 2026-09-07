@@ -4,20 +4,22 @@ namespace App\Http\Controllers\Api\Webhooks;
 
 use App\Http\Controllers\Controller;
 use App\Models\Courier;
+use App\Models\Order;
 use App\Models\Shipment;
+use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class CourierWebhookController extends Controller
 {
+    public function __construct(
+        protected OrderService $orderService,
+    ) {}
+
     public function handle(Request $request, string $courierCode): JsonResponse
     {
         $payload = $request->all();
-
-        Log::info("{$courierCode} webhook received", [
-            'payload' => $payload,
-        ]);
 
         $courier = Courier::where('code', $courierCode)->first();
 
@@ -27,10 +29,20 @@ class CourierWebhookController extends Controller
             return response()->json(['status' => 'ignored']);
         }
 
+        $secret = $courier->settings['webhook_secret'] ?? null;
+
+        if ($secret && ! hash_equals((string) $secret, (string) $request->header('X-Webhook-Secret'))) {
+            Log::warning("{$courierCode} webhook: invalid signature");
+
+            return response()->json(['status' => 'ignored'], 401);
+        }
+
+        Log::info("{$courierCode} webhook received");
+
         $trackingNumber = $this->extractTrackingNumber($payload, $courierCode);
 
         if (! $trackingNumber) {
-            Log::warning("{$courierCode} webhook: no tracking number found", ['payload' => $payload]);
+            Log::warning("{$courierCode} webhook: no tracking number found");
 
             return response()->json(['status' => 'ignored']);
         }
@@ -48,7 +60,7 @@ class CourierWebhookController extends Controller
         $rawStatus = $this->extractStatus($payload, $courierCode);
 
         if (! $rawStatus) {
-            Log::warning("{$courierCode} webhook: no status found", ['payload' => $payload]);
+            Log::warning("{$courierCode} webhook: no status found");
 
             return response()->json(['status' => 'ignored']);
         }
@@ -185,7 +197,24 @@ class CourierWebhookController extends Controller
                 'status' => 'shipped',
                 'shipped_at' => $order->shipped_at ?? now(),
             ]),
+            'returned' => $this->handleReturned($order),
             default => null,
         };
+    }
+
+    private function handleReturned(Order $order): void
+    {
+        if ($order->status !== 'shipped') {
+            return;
+        }
+
+        try {
+            $this->orderService->cancel($order, 'Returned by courier.');
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Courier webhook: could not cancel returned order', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

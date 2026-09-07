@@ -39,8 +39,8 @@ class CheckoutController extends Controller
             'guest_email' => $isGuest ? 'required|email|max:255' : 'nullable|email|max:255',
         ]);
 
-        $validated['phone'] = PhoneHelper::normalize($validated['phone'] ?? $bearerUser?->phone ?? null);
-        $validated['delivery_phone'] = PhoneHelper::normalize($validated['delivery_phone'] ?? null);
+        $validated['phone'] = PhoneHelper::normalize(($validated['phone'] ?? null) ?: $bearerUser?->phone);
+        $validated['delivery_phone'] = PhoneHelper::normalize(($validated['delivery_phone'] ?? null) ?: null);
 
         $cart = $request->attributes->get('cart');
 
@@ -134,6 +134,10 @@ class CheckoutController extends Controller
         $accessToken = PersonalAccessToken::findToken($token);
 
         if (! $accessToken) {
+            return null;
+        }
+
+        if ($accessToken->expires_at && $accessToken->expires_at->isPast()) {
             return null;
         }
 

@@ -132,7 +132,7 @@ export default function InventoryIndex({
     const [loadingMovements, setLoadingMovements] = useState(false);
     const [clientError, setClientError] = useState('');
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, processing, errors, reset } = useForm({
         type: 'adjustment',
         quantity: '',
         note: '',
@@ -191,16 +191,21 @@ export default function InventoryIndex({
 
         setClientError('');
 
-        post(route('admin.inventory.adjust', selectedInventory.id), {
-            type: data.type,
-            quantity: signedQty,
-            note: data.note || null,
-            preserveState: true,
-            onSuccess: () => {
-                setAdjustDialogOpen(false);
-                reset();
+        router.post(
+            route('admin.inventory.adjust', selectedInventory.id),
+            {
+                type: data.type,
+                quantity: signedQty,
+                note: data.note || null,
             },
-        });
+            {
+                preserveState: true,
+                onSuccess: () => {
+                    setAdjustDialogOpen(false);
+                    reset();
+                },
+            },
+        );
     };
 
     const openHistory = async (item: InventoryItem) => {

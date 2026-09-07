@@ -106,9 +106,16 @@ function SettingsForm({ courier, onClose }: { courier: Courier; onClose: () => v
     const testConnection = () => {
         setTesting(true);
         setTestResult(null);
+
+        const csrf = document.cookie.match(/(^|;\s*)XSRF-TOKEN=([^;]*)/)?.[2] ?? '';
+
         void fetch(route('admin.couriers.test-connection', courier.id), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '' },
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(csrf),
+            },
         })
             .then((r) => r.json())
             .then((res) => setTestResult(res))
@@ -123,19 +130,32 @@ function SettingsForm({ courier, onClose }: { courier: Courier; onClose: () => v
             {schema.map((field) => (
                 <div key={field.key} className="grid gap-2">
                     <Label>{field.label}</Label>
-                    <Input
-                        type={field.type === 'password' ? 'password' : 'text'}
-                        value={(data.settings[field.key] as string) ?? ''}
-                        onChange={(e) => setData(`settings.${field.key}`, e.target.value)}
-                        placeholder={field.placeholder}
-                    />
+                    {field.type === 'toggle' ? (
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                id={`settings-${field.key}`}
+                                checked={!!data.settings[field.key]}
+                                onCheckedChange={(checked) => setData('settings', { ...data.settings, [field.key]: checked })}
+                            />
+                            <Label htmlFor={`settings-${field.key}`}>{field.label}</Label>
+                        </div>
+                    ) : (
+                        <Input
+                            type={field.type === 'password' ? 'password' : 'text'}
+                            value={(data.settings[field.key] as string) ?? ''}
+                            onChange={(e) => setData('settings', { ...data.settings, [field.key]: e.target.value })}
+                            placeholder={field.placeholder}
+                        />
+                    )}
                 </div>
             ))}
 
-            <div className="flex items-center gap-2">
-                <Switch id="sandbox" checked={data.settings.sandbox as boolean} onCheckedChange={(checked) => setData('settings.sandbox', checked)} />
-                <Label htmlFor="sandbox">Sandbox mode</Label>
-            </div>
+            {!schema.some((field) => field.key === 'sandbox') && (
+                <div className="flex items-center gap-2">
+                    <Switch id="sandbox" checked={data.settings.sandbox as boolean} onCheckedChange={(checked) => setData('settings', { ...data.settings, sandbox: checked })} />
+                    <Label htmlFor="sandbox">Sandbox mode</Label>
+                </div>
+            )}
             {errors.settings && <p className="text-sm text-red-500">{typeof errors.settings === 'string' ? errors.settings : 'Validation error'}</p>}
             {testResult && (
                 <div className={`rounded-md px-3 py-2 text-sm ${testResult.success ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>

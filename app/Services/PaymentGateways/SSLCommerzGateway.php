@@ -30,7 +30,7 @@ class SSLCommerzGateway implements PaymentGateway
 
     public function initiatePayment(Order $order, Payment $payment): array
     {
-        $webhookUrl = route('payments.webhook.sslcommerz', [
+        $webhookUrl = route('payments.webhook.handle', [
             'method' => 'sslcommerz',
             'order' => $order->order_number,
         ]);
@@ -49,7 +49,7 @@ class SSLCommerzGateway implements PaymentGateway
             'product_category' => 'E-commerce',
             'product_profile' => 'general',
             'cus_name' => $order->shipping_name,
-            'cus_email' => $order->user->email,
+            'cus_email' => $order->user?->email ?? $order->guest_email ?? 'guest@example.com',
             'cus_add1' => $order->shipping_address,
             'cus_city' => $order->shipping_city,
             'cus_state' => $order->shipping_state,

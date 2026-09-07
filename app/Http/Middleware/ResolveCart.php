@@ -61,6 +61,10 @@ class ResolveCart
             return null;
         }
 
+        if ($accessToken->expires_at && $accessToken->expires_at->isPast()) {
+            return null;
+        }
+
         $user = $accessToken->tokenable;
 
         return $user instanceof User ? $user : null;

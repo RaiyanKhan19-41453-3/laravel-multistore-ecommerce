@@ -135,3 +135,51 @@ it('returns 404 for unknown payment webhook', function () {
 
     $response->assertStatus(404);
 });
+
+it('does not confirm order when webhook verification fails', function () {
+    config(['payment.verify_webhooks' => true]);
+
+    $user = User::factory()->create();
+    $product = Product::factory()->create(['price' => 500, 'is_active' => true]);
+    Inventory::factory()->forProduct($product)->withQuantity(20)->create();
+
+    $order = Order::factory()->pending()->for($user)->create(['total' => 500]);
+    $payment = Payment::factory()->for($order)->create([
+        'amount' => 500,
+        'gateway' => 'sslcommerz',
+        'method' => 'sslcommerz',
+    ]);
+
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $product->id,
+        'unit_price' => 500,
+        'quantity' => 1,
+        'subtotal' => 500,
+        'total' => 500,
+    ]);
+
+    $response = $this->postJson('/api/payments/webhook/sslcommerz', [
+        'status' => 'VALID',
+        'tran_id' => $payment->id,
+    ]);
+
+    $response->assertOk()->assertJson(['status' => 'ok']);
+
+    $this->assertDatabaseHas('payments', [
+        'id' => $payment->id,
+        'status' => 'pending',
+    ]);
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $order->id,
+        'status' => 'pending',
+    ]);
+});
+
+it('returns 404 for unsupported webhook method', function () {
+    $response = $this->postJson('/api/payments/webhook/nagad', [
+        'status' => 'VALID',
+    ]);
+
+    $response->assertStatus(404);
+});

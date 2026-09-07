@@ -6,7 +6,6 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Services\PaymentGateways\PaymentGateway;
 use App\Services\PaymentGateways\PaymentGatewayFactory;
-use App\Services\PaymentGateways\SSLCommerzGateway;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
 
@@ -89,6 +88,17 @@ class PaymentService
             return $payment;
         }
 
+        if ($result['status'] === 'paid' && config('payment.verify_webhooks', true)) {
+            if (! $gateway->verifyPayment($payment, $payload)) {
+                Log::warning('Payment webhook verification failed', [
+                    'payment_id' => $payment->id,
+                    'gateway' => $gateway->getName(),
+                ]);
+
+                return $payment;
+            }
+        }
+
         $payment->update([
             'status' => $result['status'],
             'gateway_transaction_id' => $gatewayTransactionId,
@@ -130,7 +140,7 @@ class PaymentService
         $gateway = PaymentGatewayFactory::make($name);
 
         if (! $gateway) {
-            return app(SSLCommerzGateway::class);
+            throw new \InvalidArgumentException("Payment gateway [{$name}] is not supported.");
         }
 
         return $gateway;

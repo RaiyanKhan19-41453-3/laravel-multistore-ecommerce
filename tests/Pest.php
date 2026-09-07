@@ -1,5 +1,13 @@
 <?php
 
+use App\Models\Cart;
+use App\Models\CartItem;
+use App\Models\Inventory;
+use App\Models\Product;
+use App\Models\ShippingMethod;
+use App\Models\ShippingRate;
+use App\Models\ShippingZone;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +55,70 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+function createUser(): User
+{
+    return User::factory()->create();
+}
+
+function authHeaders(User $user): array
+{
+    $token = $user->createToken('test-token')->plainTextToken;
+
+    return ['Authorization' => "Bearer $token"];
+}
+
+function createProduct(float $price = 500, int $stock = 50): Product
+{
+    $product = Product::factory()->create(['price' => $price, 'is_active' => true]);
+    Inventory::factory()->forProduct($product)->withQuantity($stock)->create();
+
+    return $product;
+}
+
+function createCartWithItem(User $user, Product $product, int $quantity = 1): Cart
+{
+    $cart = Cart::create([
+        'user_id' => $user->id,
+        'status' => 'active',
+    ]);
+
+    CartItem::create([
+        'cart_id' => $cart->id,
+        'product_id' => $product->id,
+        'quantity' => $quantity,
+    ]);
+
+    return $cart;
+}
+
+function createTestShippingRate(): ShippingRate
+{
+    $method = ShippingMethod::firstOrCreate(['name' => 'Standard'], ['is_active' => true, 'estimated_days' => 5]);
+    $zone = ShippingZone::firstOrCreate(['name' => 'Dhaka'], [
+        'cities' => ['Dhaka'],
+        'is_fallback' => false,
+        'is_active' => true,
+    ]);
+
+    return ShippingRate::firstOrCreate(
+        ['shipping_method_id' => $method->id, 'shipping_zone_id' => $zone->id],
+        ['price' => 60, 'free_shipping_min' => null]
+    );
+}
+
+function shippingData(): array
+{
+    $rate = createTestShippingRate();
+
+    return [
+        'shipping_name' => 'Test User',
+        'phone' => '01712345678',
+        'shipping_address' => '123 Test Street',
+        'shipping_city' => 'Dhaka',
+        'shipping_state' => 'Dhaka',
+        'shipping_country' => 'Bangladesh',
+        'shipping_rate_id' => $rate->id,
+    ];
 }

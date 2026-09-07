@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
+import { formatPrice } from '@/lib/format';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -99,8 +100,9 @@ function MethodForm({ method, onClose }: { method?: ShippingMethod | null; onClo
 
 function ZoneForm({ zone, onClose }: { zone?: ShippingZone | null; onClose: () => void }) {
     const isEdit = !!zone;
-    const { data, setData, post, put, errors, processing } = useForm({
+    const { data, setData, post, put, transform, errors, processing } = useForm({
         name: zone?.name ?? '',
+        country: zone?.country ?? 'Bangladesh',
         cities: zone?.cities?.join(', ') ?? '',
         is_fallback: zone?.is_fallback ?? false,
         is_active: zone?.is_active ?? true,
@@ -111,8 +113,15 @@ function ZoneForm({ zone, onClose }: { zone?: ShippingZone | null; onClose: () =
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        const cities = isFallback ? [] : (data.cities as string).split(',').map((c: string) => c.trim()).filter(Boolean);
-        setData('cities', cities as never);
+        transform((formData) => ({
+            ...formData,
+            cities: isFallback
+                ? []
+                : String(formData.cities ?? '')
+                      .split(',')
+                      .map((c: string) => c.trim())
+                      .filter(Boolean),
+        }));
         if (isEdit) {
             put(route('admin.shipping.zones.update', zone.id), { onSuccess: () => onClose() });
         } else {
@@ -126,6 +135,11 @@ function ZoneForm({ zone, onClose }: { zone?: ShippingZone | null; onClose: () =
                 <Label htmlFor="name">Zone Name</Label>
                 <Input id="name" value={data.name as string} onChange={(e) => setData('name', e.target.value)} required placeholder="e.g. Dhaka" />
                 {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="country">Country</Label>
+                <Input id="country" value={data.country as string} onChange={(e) => setData('country', e.target.value)} required placeholder="e.g. Bangladesh" />
+                {errors.country && <p className="text-sm text-red-500">{errors.country}</p>}
             </div>
             <div className="flex items-center gap-2">
                 <Switch id="is_fallback" checked={isFallback} onCheckedChange={(checked) => setData('is_fallback', checked)} />
@@ -343,9 +357,12 @@ export default function ShippingIndex({ methods, zones, rates }: { methods: Ship
                                         <tr key={rate.id}>
                                             <td className="px-4 py-2">{rate.shipping_method.name}</td>
                                             <td className="px-4 py-2">{rate.shipping_zone.name}</td>
-                                            <td className="px-4 py-2">৳{Number(rate.price).toLocaleString()}</td>
-                                            <td className="px-4 py-2">{rate.free_shipping_min ? `৳${Number(rate.free_shipping_min).toLocaleString()}` : '—'}</td>
+                                            <td className="px-4 py-2">{formatPrice(rate.price)}</td>
+                                            <td className="px-4 py-2">{rate.free_shipping_min ? formatPrice(rate.free_shipping_min) : '—'}</td>
                                             <td className="px-4 py-2">
+                                                <button onClick={() => setEditRate(rate)} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                                    <Pencil className="h-4 w-4" />
+                                                </button>
                                                 <button onClick={() => { if (confirm('Delete this rate?')) router.delete(route('admin.shipping.rates.destroy', rate.id)); }} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
@@ -407,6 +424,15 @@ export default function ShippingIndex({ methods, zones, rates }: { methods: Ship
                         <DialogDescription>Set the price for a method + zone combination.</DialogDescription>
                     </DialogHeader>
                     <RateForm methods={activeMethods} zones={activeZones} onClose={() => setShowRateForm(false)} />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!editRate} onOpenChange={(open) => !open && setEditRate(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Shipping Rate</DialogTitle>
+                    </DialogHeader>
+                    {editRate && <RateForm rate={editRate} methods={activeMethods} zones={activeZones} onClose={() => setEditRate(null)} />}
                 </DialogContent>
             </Dialog>
         </AppLayout>

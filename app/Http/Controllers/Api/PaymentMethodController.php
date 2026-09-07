@@ -27,6 +27,11 @@ class PaymentMethodController extends Controller
             ];
         }
 
-        return response()->json(['methods' => $methods]);
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'methods' => $methods,
+            ],
+        ]);
     }
 }

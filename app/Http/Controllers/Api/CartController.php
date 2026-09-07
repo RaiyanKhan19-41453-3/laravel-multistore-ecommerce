@@ -44,7 +44,7 @@ class CartController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'product_variant_id' => 'nullable|exists:product_variants,id',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:1|max:100',
         ]);
 
         $product = Product::findOrFail($validated['product_id']);
@@ -79,7 +79,7 @@ class CartController extends Controller
         }
 
         $validated = $request->validate([
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:1|max:100',
         ]);
 
         $item = $cart->items()->findOrFail($cartItemId);
@@ -135,7 +135,14 @@ class CartController extends Controller
             'code' => 'required|string|max:50',
         ]);
 
-        $coupon = $this->cartService->applyCoupon($cart, $validated['code']);
+        try {
+            $coupon = $this->cartService->applyCoupon($cart, $validated['code']);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
         if (! $coupon) {
             return response()->json([

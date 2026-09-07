@@ -50,6 +50,7 @@ interface ImageUploadProps {
 
 function SortableExistingImage({
     image,
+    productId,
     onDelete,
     onSetPrimary,
     isPendingPrimary,

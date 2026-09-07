@@ -1,4 +1,3 @@
-const TOKEN_KEY = 'store_token';
 const USER_KEY = 'store_user';
 
 import { getGuestToken } from '@/lib/guest-token';
@@ -24,10 +23,6 @@ function getCookie(name: string): string | null {
     }
 }
 
-export function getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
-}
-
 export function getUser(): StoreUser | null {
     const raw = localStorage.getItem(USER_KEY);
 
@@ -40,30 +35,22 @@ export function getUser(): StoreUser | null {
     }
 }
 
-export function setAuth(token: string, user: StoreUser): void {
-    localStorage.setItem(TOKEN_KEY, token);
+export function setAuth(user: StoreUser): void {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 export function clearAuth(): void {
-    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
 }
 
 export async function apiStore<T = unknown>(
     path: string,
     options: { method?: string; body?: unknown } = {},
-): Promise<{ ok: boolean; data: T | null; message?: string }> {
+): Promise<{ ok: boolean; data: T | null; message?: string; errors?: Record<string, string[]> }> {
     const headers: Record<string, string> = {
         Accept: 'application/json',
         'Content-Type': 'application/json',
     };
-
-    const token = getToken();
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
 
     const csrf = getCookie('XSRF-TOKEN');
 
@@ -73,12 +60,22 @@ export async function apiStore<T = unknown>(
 
     headers['X-Guest-Token'] = getGuestToken();
 
-    const res = await fetch(`/api${path}`, {
-        method: options.method ?? (options.body ? 'POST' : 'GET'),
-        headers,
-        credentials: 'same-origin',
-        body: options.body ? JSON.stringify(options.body) : undefined,
-    });
+    let res: Response;
+
+    try {
+        res = await fetch(`/api${path}`, {
+            method: options.method ?? (options.body ? 'POST' : 'GET'),
+            headers,
+            credentials: 'same-origin',
+            body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+    } catch {
+        return { ok: false, data: null, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    if (res.status === 401) {
+        clearAuth();
+    }
 
     let json: Record<string, unknown> | null = null;
 
@@ -94,5 +91,6 @@ export async function apiStore<T = unknown>(
         ok: res.ok,
         data,
         message: json?.message as string | undefined,
+        errors: json?.errors as Record<string, string[]> | undefined,
     };
 }

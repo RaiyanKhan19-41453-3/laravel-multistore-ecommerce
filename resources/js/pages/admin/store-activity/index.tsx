@@ -1,5 +1,6 @@
 import Heading from '@/components/heading';
 import AppLayout from '@/layouts/app-layout';
+import { formatPrice } from '@/lib/format';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { ShoppingCart, Users, Package, UserCheck, Trash2 } from 'lucide-react';
@@ -49,10 +50,6 @@ interface RecentGuest {
     guest_token: string;
     item_count: number;
     created_at: string;
-}
-
-function formatPrice(value: number): string {
-    return `৳${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 function formatDate(iso: string): string {

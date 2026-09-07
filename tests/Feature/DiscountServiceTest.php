@@ -188,6 +188,7 @@ it('increments usage atomically and respects limit', function () {
 });
 
 it('increments coupon usage atomically and respects limit', function () {
+
     $discount = Discount::factory()->create(['is_active' => true]);
     $coupon = Coupon::factory()->for($discount)->create([
         'usage_limit' => 2,
@@ -280,7 +281,7 @@ it('bestDiscountForOrder stacks coupon with stackable automatic discount', funct
     $this->assertEquals(150, $result['total_amount']);
 });
 
-it('bestDiscountForOrder always stacks coupon on top of auto-discount', function () {
+it('bestDiscountForOrder blocks stacking when coupon is not stackable', function () {
     $product = Product::factory()->create(['price' => 1000]);
 
     $autoDiscount = Discount::factory()->percentage()->create(['value' => 10, 'stackable' => true]);
@@ -296,9 +297,31 @@ it('bestDiscountForOrder always stacks coupon on top of auto-discount', function
     $result = $service->bestDiscountForOrder(1000, 'NOSTACK', [$product->id]);
 
     $this->assertNotNull($result);
-    $this->assertTrue($result['stacked']);
-    $this->assertCount(2, $result['discounts']);
-    $this->assertEquals(150, $result['total_amount']);
+    $this->assertFalse($result['stacked'] ?? false);
+    // Auto 10% of 1000 = 100 beats coupon 50, so auto applies alone.
+    $this->assertEquals($autoDiscount->id, $result['discount']->id);
+    $this->assertEquals(100, $result['amount']);
+});
+
+it('bestDiscountForOrder lets bigger coupon win when not stackable', function () {
+    $product = Product::factory()->create(['price' => 1000]);
+
+    $autoDiscount = Discount::factory()->percentage()->create(['value' => 10, 'stackable' => false]);
+    $autoDiscount->products()->attach($product);
+
+    $couponDiscount = Discount::factory()->fixed()->create(['value' => 200, 'stackable' => true]);
+    Coupon::factory()->for($couponDiscount)->create([
+        'code' => 'BIGSAVE',
+        'is_active' => true,
+    ]);
+
+    $service = new DiscountService;
+    $result = $service->bestDiscountForOrder(1000, 'BIGSAVE', [$product->id]);
+
+    $this->assertNotNull($result);
+    $this->assertFalse($result['stacked'] ?? false);
+    $this->assertEquals($couponDiscount->id, $result['discount']->id);
+    $this->assertEquals(200, $result['amount']);
 });
 
 it('bestDiscountForOrder filters by productIds', function () {
@@ -312,4 +335,41 @@ it('bestDiscountForOrder filters by productIds', function () {
     $result = $service->bestDiscountForOrder(1000, null, [$product2->id]);
 
     $this->assertNull($result);
+});
+
+it('increments usage only for the given discount', function () {
+    $target = Discount::factory()->create([
+        'usage_limit' => 5,
+        'usage_count' => 1,
+    ]);
+    $other = Discount::factory()->create([
+        'usage_limit' => 5,
+        'usage_count' => 1,
+    ]);
+    $service = new DiscountService;
+
+    $result = $service->incrementUsage($target);
+
+    $this->assertTrue($result);
+    expect($target->fresh()->usage_count)->toBe(2);
+    expect($other->fresh()->usage_count)->toBe(1);
+});
+
+it('increments coupon usage only for the given coupon', function () {
+    $discount = Discount::factory()->create(['is_active' => true]);
+    $target = Coupon::factory()->for($discount)->create([
+        'usage_limit' => 5,
+        'usage_count' => 1,
+    ]);
+    $other = Coupon::factory()->for($discount)->create([
+        'usage_limit' => 5,
+        'usage_count' => 1,
+    ]);
+    $service = new DiscountService;
+
+    $result = $service->incrementCouponUsage($target);
+
+    $this->assertTrue($result);
+    expect($target->fresh()->usage_count)->toBe(2);
+    expect($other->fresh()->usage_count)->toBe(1);
 });

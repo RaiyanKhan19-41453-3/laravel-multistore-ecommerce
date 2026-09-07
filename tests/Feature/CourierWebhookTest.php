@@ -1,9 +1,12 @@
 <?php
 
 use App\Models\Courier;
+use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\Shipment;
+use App\Models\User;
 
 function createWebhookCourier(string $code): Courier
 {
@@ -370,4 +373,114 @@ it('does not downgrade order status from delivered to shipped', function () {
 
     $order->refresh();
     expect($order->status)->toBe('shipped');
+});
+
+it('rejects courier webhook with invalid secret', function () {
+    $courier = createWebhookCourier('steadfast');
+    $courier->update(['settings' => ['webhook_secret' => 's3cret']]);
+    $order = createWebhookOrder('shipped');
+    $shipment = createWebhookShipment($order, $courier, 'SF_SECRET_1');
+
+    $response = $this->postJson('/api/webhooks/couriers/steadfast', [
+        'consignment_id' => 'SF_SECRET_1',
+        'status' => 'delivered',
+    ], ['X-Webhook-Secret' => 'wrong']);
+
+    $response->assertStatus(401)->assertJson(['status' => 'ignored']);
+
+    expect($shipment->fresh()->status)->toBe('pending');
+});
+
+it('accepts courier webhook with valid secret', function () {
+    $courier = createWebhookCourier('steadfast');
+    $courier->update(['settings' => ['webhook_secret' => 's3cret']]);
+    $order = createWebhookOrder('shipped');
+    $shipment = createWebhookShipment($order, $courier, 'SF_SECRET_2');
+
+    $response = $this->postJson('/api/webhooks/couriers/steadfast', [
+        'consignment_id' => 'SF_SECRET_2',
+        'status' => 'delivered',
+    ], ['X-Webhook-Secret' => 's3cret']);
+
+    $response->assertOk()->assertJson(['status' => 'processed']);
+
+    expect($shipment->fresh()->status)->toBe('delivered');
+});
+
+it('cancels shipped order and restores stock on returned webhook', function () {
+    $courier = createWebhookCourier('steadfast');
+    $product = Product::factory()->create(['price' => 500, 'is_active' => true]);
+    Inventory::factory()->forProduct($product)->withQuantity(20)->create();
+
+    $order = createWebhookOrder('shipped');
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $product->id,
+        'quantity' => 3,
+    ]);
+    $shipment = createWebhookShipment($order, $courier, 'SF_RETURN_1');
+
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    $inventory->update(['quantity' => 17, 'reserved_quantity' => 0]);
+
+    $response = $this->postJson('/api/webhooks/couriers/steadfast', [
+        'consignment_id' => 'SF_RETURN_1',
+        'status' => 'returned',
+    ]);
+
+    $response->assertOk()->assertJson(['status' => 'processed']);
+
+    expect($shipment->fresh()->status)->toBe('returned');
+    expect($order->fresh()->status)->toBe('cancelled');
+    expect($order->fresh()->cancellation_reason)->toBe('Returned by courier.');
+    expect($inventory->fresh()->quantity)->toBe(20);
+});
+
+it('leaves non-shipped order alone on returned webhook', function () {
+    $courier = createWebhookCourier('steadfast');
+    $order = createWebhookOrder('pending');
+    $shipment = createWebhookShipment($order, $courier, 'SF_RETURN_2');
+
+    $this->postJson('/api/webhooks/couriers/steadfast', [
+        'consignment_id' => 'SF_RETURN_2',
+        'status' => 'returned',
+    ])->assertOk();
+
+    expect($shipment->fresh()->status)->toBe('returned');
+    expect($order->fresh()->status)->toBe('pending');
+});
+
+it('leaves order alone on failed webhook', function () {
+    $courier = createWebhookCourier('steadfast');
+    $order = createWebhookOrder('shipped');
+    $shipment = createWebhookShipment($order, $courier, 'SF_FAIL_1');
+
+    $this->postJson('/api/webhooks/couriers/steadfast', [
+        'consignment_id' => 'SF_FAIL_1',
+        'status' => 'cancelled',
+    ])->assertOk();
+
+    expect($shipment->fresh()->status)->toBe('failed');
+    expect($order->fresh()->status)->toBe('shipped');
+});
+
+it('cancels shipped order via api', function () {
+    $user = User::factory()->create();
+    $product = Product::factory()->create(['price' => 500, 'is_active' => true]);
+    Inventory::factory()->forProduct($product)->withQuantity(20)->create();
+
+    $order = Order::factory()->for($user)->create(['status' => 'shipped']);
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $product->id,
+        'quantity' => 2,
+    ]);
+
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    $inventory->update(['quantity' => 18, 'reserved_quantity' => 0]);
+
+    $this->actingAs($user)
+        ->postJson("/api/orders/{$order->id}/cancel")
+        ->assertOk();
+
+    expect($order->fresh()->status)->toBe('cancelled');
+    expect($inventory->fresh()->quantity)->toBe(20);
 });

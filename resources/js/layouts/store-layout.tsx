@@ -18,11 +18,18 @@ export default function StoreLayout({
     useEffect(() => {
         setUser(getUser());
 
-        void apiStore<CartSummary>('/cart').then((res) => {
-            if (res.ok && res.data) {
-                setCartCount(res.data.item_count);
-            }
-        });
+        const refreshCartCount = () => {
+            void apiStore<CartSummary>('/cart').then((res) => {
+                if (res.ok && res.data) {
+                    setCartCount(res.data.item_count);
+                }
+            });
+        };
+
+        refreshCartCount();
+        window.addEventListener('cart:updated', refreshCartCount);
+
+        return () => window.removeEventListener('cart:updated', refreshCartCount);
     }, []);
 
     const logout = () => {
@@ -62,7 +69,7 @@ export default function StoreLayout({
 
                         {user ? (
                             <>
-                                <Link href="/orders" className="hover:underline">
+                                <Link href="/order-confirmation" className="hover:underline">
                                     Orders
                                 </Link>
                                 <span className="text-[var(--store-muted)]">{user.name}</span>
@@ -94,12 +101,12 @@ export default function StoreLayout({
                 <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6 text-sm text-[var(--store-muted)]">
                     <p>&copy; {new Date().getFullYear()} Store. All rights reserved.</p>
                     <div className="flex gap-4">
-                        <a href="#" className="hover:underline">
-                            Terms
-                        </a>
-                        <a href="#" className="hover:underline">
-                            Privacy
-                        </a>
+                        <Link href="/products" className="hover:underline">
+                            Products
+                        </Link>
+                        <Link href="/cart" className="hover:underline">
+                            Cart
+                        </Link>
                     </div>
                 </div>
             </footer>

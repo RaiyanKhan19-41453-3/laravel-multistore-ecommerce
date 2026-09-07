@@ -1,22 +1,25 @@
 import StoreLayout from '@/layouts/store-layout';
+import { formatPrice } from '@/lib/format';
 import type { ProductSummary } from '@/types';
 import { Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
-function formatPrice(value: number): string {
-    return `৳${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-
 export default function StoreProducts() {
     const [products, setProducts] = useState<ProductSummary[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(false);
 
     useEffect(() => {
         void fetch('/api/products?per_page=50')
-            .then((r) => r.json())
+            .then((r) => {
+                if (!r.ok) throw new Error('failed');
+                return r.json();
+            })
             .then((json: { success: boolean; data: { data: ProductSummary[] } }) => {
                 if (json.success) setProducts(json.data.data);
+                else setFetchError(true);
             })
+            .catch(() => setFetchError(true))
             .finally(() => setLoading(false));
     }, []);
 
@@ -27,6 +30,10 @@ export default function StoreProducts() {
 
                 {loading ? (
                     <p className="text-[var(--store-muted)]">Loading...</p>
+                ) : fetchError ? (
+                    <p className="text-[var(--store-muted)]">
+                        Couldn&apos;t load products. <button type="button" onClick={() => window.location.reload()} className="text-[var(--store-accent)] hover:underline">Try again</button>
+                    </p>
                 ) : products.length === 0 ? (
                     <p className="text-[var(--store-muted)]">No products found.</p>
                 ) : (

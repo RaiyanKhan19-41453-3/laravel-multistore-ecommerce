@@ -1,12 +1,9 @@
 import StoreLayout from '@/layouts/store-layout';
-import { apiStore, getUser } from '@/lib/auth';
+import { apiStore, getUser, type StoreUser } from '@/lib/auth';
+import { formatPrice } from '@/lib/format';
 import { Link, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { CheckCircle, Package, Search, Tag, Truck } from 'lucide-react';
-
-function formatPrice(value: number): string {
-    return `\u09f3${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 interface OrderItem {
     name: string;
@@ -71,23 +68,24 @@ interface PageProps {
 export default function OrderConfirmation() {
     const { orderNumber } = usePage<PageProps>().props;
 
-    const user = getUser();
+    const [currentUser] = useState<StoreUser | null>(() => getUser());
+
+    const queryParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const queryEmail = queryParams.get('email') ?? '';
+    const queryPhone = queryParams.get('phone') ?? '';
 
     const [order, setOrder] = useState<Order | null>(null);
-    const [loading, setLoading] = useState(() => !!(user && orderNumber));
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [lookup, setLookup] = useState<LookupForm>({
-        email: '',
-        phone: '',
+        email: queryEmail,
+        phone: queryPhone,
         order_number: orderNumber ?? '',
     });
     const [lookupBusy, setLookupBusy] = useState(false);
     const [lookupError, setLookupError] = useState<string | null>(null);
-    const [showLookup, setShowLookup] = useState(() => {
-        if (user && orderNumber) return false;
-        return true;
-    });
+    const [showLookup, setShowLookup] = useState(true);
 
     const fetchOrder = (identifier: { email?: string; phone?: string }, orderNum: string) => {
         setLoading(true);
@@ -108,10 +106,27 @@ export default function OrderConfirmation() {
     };
 
     useEffect(() => {
-        if (orderNumber && user) {
-            fetchOrder({}, orderNumber);
+        if (!orderNumber) {
+            return;
         }
-    }, [orderNumber, user]);
+
+        const identifier: { email?: string; phone?: string } = {};
+
+        if (queryEmail.trim()) {
+            identifier.email = queryEmail.trim();
+        } else if (queryPhone.trim()) {
+            identifier.phone = queryPhone.trim();
+        } else if (currentUser?.phone) {
+            identifier.phone = currentUser.phone;
+        } else if (currentUser?.email) {
+            identifier.email = currentUser.email;
+        }
+
+        if (identifier.email || identifier.phone) {
+            fetchOrder(identifier, orderNumber);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orderNumber]);
 
     const handleLookup = (e: React.FormEvent) => {
         e.preventDefault();
@@ -212,7 +227,7 @@ export default function OrderConfirmation() {
         );
     }
 
-    if (error || (!order && !showLookup)) {
+    if (error || !order) {
         return (
             <StoreLayout title="Order Not Found">
                 <div className="mx-auto max-w-2xl px-4 py-12 text-center">
@@ -309,8 +324,8 @@ export default function OrderConfirmation() {
                         )}
 
                         {hasCoupon && (
-                            <div className="flex justify-between text-green-600">
-                                <span>Coupon ({order.coupon_code})</span>
+                            <div className="text-green-600">
+                                <span>Coupon applied: {order.coupon_code}</span>
                             </div>
                         )}
 
@@ -360,7 +375,7 @@ export default function OrderConfirmation() {
                         <p><span className="text-[var(--store-muted)]">Name:</span> {order.shipping_name}</p>
                         <p><span className="text-[var(--store-muted)]">Phone:</span> {order.shipping_phone}</p>
                         <p><span className="text-[var(--store-muted)]">Address:</span> {order.shipping_address}</p>
-                        <p><span className="text-[var(--store-muted)]">City:</span> {order.shipping_city}, {order.shipping_state}</p>
+                        <p><span className="text-[var(--store-muted)]">City:</span> {order.shipping_city}{order.shipping_state ? `, ${order.shipping_state}` : ''}</p>
                         <p><span className="text-[var(--store-muted)]">Country:</span> {order.shipping_country}</p>
                     </div>
                 </div>

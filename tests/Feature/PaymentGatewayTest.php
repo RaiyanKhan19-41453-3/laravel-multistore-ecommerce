@@ -105,9 +105,9 @@ it('can fetch payment methods from API', function () {
     $response = $this->getJson('/api/payment-methods');
 
     $response->assertOk()
-        ->assertJsonStructure(['methods' => [['value', 'label']]]);
+        ->assertJsonStructure(['success', 'data' => ['methods' => [['value', 'label']]]]);
 
-    $methods = $response->json('methods');
+    $methods = $response->json('data.methods');
     expect($methods)->toHaveCount(2);
     expect($methods[0]['value'])->toBe('cod');
     expect($methods[1]['value'])->toBe('sslcommerz');
@@ -122,7 +122,7 @@ it('only returns enabled payment methods', function () {
 
     $response->assertOk();
 
-    $methods = $response->json('methods');
+    $methods = $response->json('data.methods');
     expect($methods)->toHaveCount(1);
     expect($methods[0]['value'])->toBe('sslcommerz');
 });

@@ -23,56 +23,15 @@ class PaymentWebhookController extends Controller
     {
         $payload = $request->all();
 
-        if ($method === 'bkash') {
-            $gateway = new BkashGateway;
-            $paymentId = $payload['paymentID'] ?? '';
+        try {
+            $payment = $method === 'bkash'
+                ? $this->handleBkashWebhook($payload)
+                : $this->paymentService->handleWebhook($method, $payload);
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Payment webhook for unsupported method', ['method' => $method]);
 
-            if (! $paymentId) {
-                return response()->json(['status' => 'error', 'message' => 'Missing paymentID'], 400);
-            }
-
-            try {
-                $payment = Payment::where('gateway', 'bkash')
-                    ->where('gateway_transaction_id', $paymentId)
-                    ->first();
-
-                if (! $payment) {
-                    Log::warning('bKash webhook received for unknown payment', ['paymentID' => $paymentId]);
-
-                    return response()->json(['status' => 'error'], 404);
-                }
-
-                if ($payment->isPaid()) {
-                    return response()->json(['status' => 'ok']);
-                }
-
-                $verified = $gateway->verifyPayment($payment, $payload);
-
-                if (! $verified) {
-                    Log::warning('bKash webhook execute failed', ['payment_id' => $payment->id]);
-
-                    return response()->json(['status' => 'error', 'message' => 'Verification failed'], 400);
-                }
-
-                $payment->update([
-                    'status' => 'paid',
-                    'paid_at' => now(),
-                    'gateway_response' => $payload,
-                ]);
-
-                if ($payment->order->status === 'pending') {
-                    $this->orderService->confirmPayment($payment->order, $payment);
-                }
-
-                return response()->json(['status' => 'ok']);
-            } catch (\Exception $e) {
-                Log::error('bKash webhook error', ['error' => $e->getMessage()]);
-
-                return response()->json(['status' => 'error'], 500);
-            }
+            return response()->json(['status' => 'ignored'], 422);
         }
-
-        $payment = $this->paymentService->handleWebhook($method, $payload);
 
         if (! $payment) {
             return response()->json(['status' => 'error'], 404);
@@ -87,6 +46,46 @@ class PaymentWebhookController extends Controller
         }
 
         return response()->json(['status' => 'ok']);
+    }
+
+    private function handleBkashWebhook(array $payload): ?Payment
+    {
+        $gateway = new BkashGateway;
+        $paymentId = $payload['paymentID'] ?? '';
+
+        if (! $paymentId) {
+            return null;
+        }
+
+        $payment = Payment::where('gateway', 'bkash')
+            ->where('gateway_transaction_id', $paymentId)
+            ->first();
+
+        if (! $payment) {
+            Log::warning('bKash webhook received for unknown payment', ['paymentID' => $paymentId]);
+
+            return null;
+        }
+
+        if ($payment->isPaid()) {
+            return $payment;
+        }
+
+        $verified = $gateway->verifyPayment($payment, $payload);
+
+        if (! $verified) {
+            Log::warning('bKash webhook execute failed', ['payment_id' => $payment->id]);
+
+            return $payment;
+        }
+
+        $payment->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+            'gateway_response' => $payload,
+        ]);
+
+        return $payment;
     }
 
     public function handleBkashCallback(Request $request): RedirectResponse
@@ -105,6 +104,12 @@ class PaymentWebhookController extends Controller
                 ->first();
 
             if (! $payment) {
+                return redirect('/checkout?error=bkash_payment_not_found');
+            }
+
+            if ($payment->order->order_number !== $orderNumber) {
+                Log::warning('bKash callback order mismatch', ['payment_id' => $payment->id]);
+
                 return redirect('/checkout?error=bkash_payment_not_found');
             }
 

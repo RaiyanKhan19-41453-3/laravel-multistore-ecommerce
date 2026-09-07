@@ -82,6 +82,7 @@ class OrderService
                 $productTotals,
                 $variantIds,
                 $items,
+                $this->discountService->redemptionIdentifier($user, $shippingData['guest_email'] ?? null),
             );
 
             $discountTotal = 0;
@@ -142,7 +143,7 @@ class OrderService
                 'shipping_estimated_days' => $shippingEstimatedDays,
                 'discount_ids' => $discountIds ?: null,
                 'shipping_name' => $shippingData['shipping_name'],
-                'shipping_phone' => $shippingData['delivery_phone'] ?? $shippingData['phone'] ?? null,
+                'shipping_phone' => $shippingData['delivery_phone'] ?: $shippingData['phone'] ?? null,
                 'shipping_address' => $shippingData['shipping_address'],
                 'shipping_city' => $shippingData['shipping_city'],
                 'shipping_state' => $shippingData['shipping_state'] ?? null,
@@ -156,6 +157,22 @@ class OrderService
                 $order->items()->create($orderItemData);
             }
 
+            $couponIdentifier = $this->discountService->redemptionIdentifier(
+                $user, $shippingData['guest_email'] ?? null
+            );
+
+            if ($cart->coupon && in_array($cart->coupon->discount_id, $discountIds)) {
+                $this->discountService->assertCouponRedeemable($cart->coupon, $couponIdentifier);
+
+                if ($couponIdentifier !== null) {
+                    $this->discountService->reserveCouponRedemption($cart->coupon, $couponIdentifier, $order->id);
+                }
+            }
+
+            // Cart reservations transfer to the order: release the cart holds
+            // first, then reserve fresh for the order. reserve() enforces true
+            // availability atomically, so oversell is impossible.
+            $this->releaseCartReservations($cart);
             $this->reserveInventoryForOrder($order);
             $this->markCartConverted($cart);
 
@@ -183,8 +200,11 @@ class OrderService
 
             $this->deductInventoryForOrder($order);
 
-            if ($order->coupon_id && $order->coupon) {
-                $this->discountService->incrementUsage($order->coupon->discount);
+            $couponDiscount = $order->coupon?->discount;
+
+            if ($order->coupon_id && $couponDiscount
+                && in_array($order->coupon?->discount_id, $order->discount_ids ?? [])) {
+                $this->discountService->incrementUsage($couponDiscount);
                 $this->discountService->incrementCouponUsage($order->coupon);
             }
 
@@ -199,8 +219,11 @@ class OrderService
 
             $this->deductInventoryForOrder($order);
 
-            if ($order->coupon_id && $order->coupon) {
-                $this->discountService->incrementUsage($order->coupon->discount);
+            $couponDiscount = $order->coupon?->discount;
+
+            if ($order->coupon_id && $couponDiscount
+                && in_array($order->coupon?->discount_id, $order->discount_ids ?? [])) {
+                $this->discountService->incrementUsage($couponDiscount);
                 $this->discountService->incrementCouponUsage($order->coupon);
             }
 
@@ -214,7 +237,7 @@ class OrderService
             'pending' => ['confirmed', 'cancelled', 'expired'],
             'confirmed' => ['processing', 'cancelled'],
             'processing' => ['shipped', 'cancelled'],
-            'shipped' => ['delivered'],
+            'shipped' => ['delivered', 'cancelled'],
             'delivered' => ['completed'],
         ];
 
@@ -246,16 +269,20 @@ class OrderService
             $this->updateStatus($order, 'cancelled');
 
             $order->update(['cancellation_reason' => $reason]);
+            $this->discountService->releaseCouponRedemptionsForOrder($order);
 
-            if ($originalStatus === 'confirmed') {
+            if ($originalStatus === 'confirmed' || $originalStatus === 'processing' || $originalStatus === 'shipped') {
                 $this->restoreInventoryForOrder($order);
             } elseif ($originalStatus === 'pending') {
                 $this->releaseInventoryForOrder($order);
             }
 
-            if ($originalStatus === 'confirmed') {
-                if ($order->coupon_id && $order->coupon) {
-                    $this->discountService->decrementUsage($order->coupon->discount);
+            if ($originalStatus === 'confirmed' || $originalStatus === 'processing' || $originalStatus === 'shipped') {
+                $couponDiscount = $order->coupon?->discount;
+
+                if ($order->coupon_id && $couponDiscount
+                    && in_array($order->coupon?->discount_id, $order->discount_ids ?? [])) {
+                    $this->discountService->decrementUsage($couponDiscount);
                     $this->discountService->decrementCouponUsage($order->coupon);
                 }
 
@@ -267,16 +294,30 @@ class OrderService
     public function expireOrder(Order $order): void
     {
         DB::transaction(function () use ($order) {
+            $order = Order::lockForUpdate()->find($order->id);
+
+            if (! $order || $order->status !== 'pending') {
+                return;
+            }
+
             $order->update(['status' => 'expired']);
             $this->releaseInventoryForOrder($order);
+            $this->discountService->releaseCouponRedemptionsForOrder($order);
         });
     }
 
     public function handlePaymentFailure(Order $order): void
     {
         DB::transaction(function () use ($order) {
-            $order->update(['status' => 'cancelled']);
+            $order = Order::lockForUpdate()->find($order->id);
+
+            if (! $order || $order->status !== 'pending') {
+                return;
+            }
+
+            $this->updateStatus($order, 'cancelled');
             $this->releaseInventoryForOrder($order);
+            $this->discountService->releaseCouponRedemptionsForOrder($order);
         });
     }
 
@@ -286,7 +327,7 @@ class OrderService
             'method' => $paymentMethod,
             'status' => 'pending',
             'amount' => $order->total,
-            'gateway' => config('payment.default', 'sslcommerz'),
+            'gateway' => $paymentMethod,
         ]);
     }
 
@@ -304,12 +345,26 @@ class OrderService
             }
 
             $inventory = $this->getInventoryForItem($item);
-            $available = $inventory->getAvailableQuantity();
 
-            if ($available < $item->quantity) {
+            // The cart's own reservation transfers to the order (released then
+            // re-reserved below), so validate against physical stock here.
+            // reserveInventoryForOrder() enforces true availability atomically.
+            if ($inventory->quantity < $item->quantity) {
                 throw new \InvalidArgumentException(
-                    "Insufficient stock for '{$product->name}'. Available: {$available}, requested: {$item->quantity}."
+                    "Insufficient stock for '{$product->name}'. Available: {$inventory->quantity}, requested: {$item->quantity}."
                 );
+            }
+        }
+    }
+
+    private function releaseCartReservations(Cart $cart): void
+    {
+        foreach ($cart->items as $item) {
+            try {
+                $inventory = $this->getInventoryForItem($item);
+                $this->inventoryService->release($inventory, $item->quantity);
+            } catch (\InvalidArgumentException) {
+                // Inventory row gone (test helpers create rows directly) — nothing to release.
             }
         }
     }
@@ -450,7 +505,7 @@ class OrderService
         }
 
         foreach ($order->discount_ids as $discountId) {
-            if ($order->coupon_id && $discountId === $order->coupon->discount_id) {
+            if ($order->coupon_id && $discountId === $order->coupon?->discount_id) {
                 continue;
             }
 
@@ -468,7 +523,7 @@ class OrderService
         }
 
         foreach ($order->discount_ids as $discountId) {
-            if ($order->coupon_id && $discountId === $order->coupon->discount_id) {
+            if ($order->coupon_id && $discountId === $order->coupon?->discount_id) {
                 continue;
             }
 

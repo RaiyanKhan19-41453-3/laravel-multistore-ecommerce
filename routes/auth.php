@@ -6,16 +6,12 @@ use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
-use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
-    Route::get('admin/register', [RegisteredUserController::class, 'create'])
-        ->name('register');
-
-    Route::post('admin/register', [RegisteredUserController::class, 'store']);
-
+    // NOTE: public admin registration is disabled. Storefront users register
+    // via POST /api/auth/register; admin accounts are created by existing admins.
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 

@@ -1,12 +1,9 @@
 import StoreLayout from '@/layouts/store-layout';
-import { getGuestToken } from '@/lib/guest-token';
+import { apiStore } from '@/lib/auth';
+import { formatPrice } from '@/lib/format';
 import type { ProductDetail, ProductVariant } from '@/types';
 import { Link } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-
-function formatPrice(value: number): string {
-    return `৳${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
 
 function findVariant(variants: ProductVariant[], selected: Record<number, number>): ProductVariant | null {
     const attrIds = Object.keys(selected).map(Number);
@@ -41,10 +38,15 @@ export default function ProductShow({ slug }: { slug: string }) {
     const [quantity, setQuantity] = useState(1);
     const [adding, setAdding] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
     useEffect(() => {
         setLoading(true);
         setError(null);
+        setSelected({});
+        setQuantity(1);
+        setNotice(null);
+        setSelectedImage(null);
         void fetch(`/api/products/${slug}`)
             .then((r) => {
                 if (!r.ok) throw new Error('not found');
@@ -107,33 +109,27 @@ export default function ProductShow({ slug }: { slug: string }) {
         setAdding(true);
         setNotice(null);
 
-        const csrf = document.cookie.match(/(^|;\s*)XSRF-TOKEN=([^;]*)/)?.[2];
-
-        void fetch('/api/cart/items', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-Guest-Token': getGuestToken(),
-                ...(csrf ? { 'X-XSRF-TOKEN': decodeURIComponent(csrf) } : {}),
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify({
+        void apiStore('/cart/items', {
+            body: {
                 product_id: product.id,
                 product_variant_id: selectedVariant?.id,
                 quantity,
-            }),
+            },
         })
-            .then((r) => r.json())
-            .then((json: { success: boolean; message?: string }) => {
-                if (json.success) {
+            .then((res) => {
+                setAdding(false);
+
+                if (res.ok) {
                     setNotice('Added to cart.');
+                    window.dispatchEvent(new CustomEvent('cart:updated'));
                 } else {
-                    setNotice(json.message ?? 'Could not add to cart.');
+                    setNotice(res.message ?? 'Could not add to cart.');
                 }
             })
-            .catch(() => setNotice('Could not add to cart.'))
-            .finally(() => setAdding(false));
+            .catch(() => {
+                setAdding(false);
+                setNotice('Could not add to cart.');
+            });
     };
 
     if (loading) {
@@ -168,8 +164,8 @@ export default function ProductShow({ slug }: { slug: string }) {
                     {/* Images */}
                     <div>
                         <div className="aspect-square overflow-hidden rounded-lg border border-[var(--store-border)] bg-gray-100 dark:bg-neutral-800">
-                            {product.primary_image ? (
-                                <img src={product.primary_image} alt={product.name} className="h-full w-full object-cover" />
+                            {selectedImage ?? product.primary_image ? (
+                                <img src={selectedImage ?? product.primary_image ?? ''} alt={product.name} className="h-full w-full object-cover" />
                             ) : (
                                 <div className="flex h-full w-full items-center justify-center text-[var(--store-muted)]">No image</div>
                             )}
@@ -177,12 +173,18 @@ export default function ProductShow({ slug }: { slug: string }) {
                         {product.images.length > 1 && (
                             <div className="mt-3 flex gap-2">
                                 {product.images.map((img) => (
-                                    <div
+                                    <button
                                         key={img.id}
-                                        className="h-16 w-16 overflow-hidden rounded border border-[var(--store-border)]"
+                                        type="button"
+                                        onClick={() => setSelectedImage(img.url)}
+                                        className={`h-16 w-16 overflow-hidden rounded border ${
+                                            (selectedImage ?? product.primary_image) === img.url
+                                                ? 'border-[var(--store-accent)] ring-1 ring-[var(--store-accent)]'
+                                                : 'border-[var(--store-border)]'
+                                        }`}
                                     >
                                         <img src={img.url} alt={img.alt_text ?? ''} className="h-full w-full object-cover" />
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         )}

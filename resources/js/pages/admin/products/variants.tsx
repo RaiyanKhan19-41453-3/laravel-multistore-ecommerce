@@ -33,6 +33,7 @@ interface VariantData {
     quantity: string;
     is_active: boolean;
     attribute_value_ids: number[];
+    [key: string]: string | number | boolean | number[] | undefined;
 }
 
 interface Product {
@@ -128,7 +129,6 @@ export default function ProductVariants({
 
     const updateVariant = (index: number, field: keyof VariantData, value: string | number | boolean | number[]) => {
         const updated = [...data.variants];
-        // @ts-expect-error dynamic field assignment
         updated[index][field] = value;
         setData('variants', updated);
     };

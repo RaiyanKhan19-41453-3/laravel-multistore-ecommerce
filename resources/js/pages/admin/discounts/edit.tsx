@@ -42,6 +42,7 @@ interface SelectableVariant {
     name: string;
     sku?: string;
     product_id: number;
+    product: { id: number; name: string };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [

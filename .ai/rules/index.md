@@ -5,5 +5,6 @@ Before planning or editing, find the row whose globs match the file's path and r
 | Applies to | Rule file |
 | --- | --- |
 | app/Http/Controllers/Api/OrderController.php | .ai/rules/api.md |
+| bootstrap/app.php | .ai/rules/bootstrap.md |
 | database/migrations/** | .ai/rules/migrations.md |
 | app/Models/Shipping*.php | .ai/rules/models.md |

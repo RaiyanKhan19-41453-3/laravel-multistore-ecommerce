@@ -76,10 +76,16 @@ class ProductSeeder extends Seeder
         foreach ($simpleProducts as $productData) {
             $quantity = $productData['quantity'];
             unset($productData['quantity']);
-            $product = Product::create(array_merge($productData, ['type' => 'simple']));
+            $product = Product::firstOrCreate(
+                ['sku' => $productData['sku']],
+                array_merge($productData, ['type' => 'simple'])
+            );
             $categoryIds = $categories->random(min(2, $categories->count()))->pluck('id')->toArray();
-            $product->categories()->sync($categoryIds);
-            $product->inventory()->create(['quantity' => $quantity]);
+            $product->categories()->syncWithoutDetaching($categoryIds);
+            $product->inventory()->firstOrCreate(
+                ['product_variant_id' => null],
+                ['quantity' => $quantity]
+            );
         }
 
         // Variable products with variants
@@ -136,13 +142,16 @@ class ProductSeeder extends Seeder
                 $attributeNames = $productData['attributes'];
                 unset($productData['attributes']);
 
-                $product = Product::create(array_merge($productData, ['type' => 'variable']));
+                $product = Product::firstOrCreate(
+                    ['sku' => $productData['sku']],
+                    array_merge($productData, ['type' => 'variable'])
+                );
 
                 $categoryIds = $categories->random(min(2, $categories->count()))->pluck('id')->toArray();
-                $product->categories()->sync($categoryIds);
+                $product->categories()->syncWithoutDetaching($categoryIds);
 
                 $productAttributes = Attribute::whereIn('name', $attributeNames)->get();
-                $product->productAttributes()->sync($productAttributes->pluck('id')->mapWithKeys(fn ($id) => [$id => ['sort_order' => 0]]));
+                $product->productAttributes()->syncWithoutDetaching($productAttributes->pluck('id')->mapWithKeys(fn ($id) => [$id => ['sort_order' => 0]]));
 
                 $colors = $selectedColors;
                 $sizes = $selectedSizes;
@@ -152,20 +161,25 @@ class ProductSeeder extends Seeder
                         $variantSku = strtoupper($product['sku'].'-'.$color->slug.'-'.$size->slug);
 
                         $qty = rand(5, 50);
-                        $variant = $product->variants()->create([
-                            'name' => $color->value.' / '.$size->value,
-                            'sku' => $variantSku,
-                            'price' => $product['price'],
-                            'compare_at_price' => $product['compare_at_price'],
-                            'cost_price' => $product['cost_price'],
-                            'is_active' => true,
-                        ]);
+                        $variant = $product->variants()->firstOrCreate(
+                            ['sku' => $variantSku],
+                            [
+                                'name' => $color->value.' / '.$size->value,
+                                'price' => $product['price'],
+                                'compare_at_price' => $product['compare_at_price'],
+                                'cost_price' => $product['cost_price'],
+                                'is_active' => true,
+                            ]
+                        );
 
-                        $variant->inventory()->create([
-                            'product_id' => $product->id,
-                            'quantity' => $qty,
-                        ]);
-                        $variant->values()->sync([$color->id, $size->id]);
+                        $variant->inventory()->firstOrCreate(
+                            [],
+                            [
+                                'product_id' => $product->id,
+                                'quantity' => $qty,
+                            ]
+                        );
+                        $variant->values()->syncWithoutDetaching([$color->id, $size->id]);
                     }
                 }
             }

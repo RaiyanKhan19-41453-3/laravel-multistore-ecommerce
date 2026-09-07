@@ -1,10 +1,13 @@
 <?php
 
+use App\Models\Coupon;
+use App\Models\Discount;
 use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\OrderService;
 
 it('can list user orders', function () {
     $user = User::factory()->create();
@@ -127,6 +130,7 @@ it('restores inventory when cancelling confirmed order', function () {
 });
 
 it('only releases reservation when cancelling pending order', function () {
+
     $user = User::factory()->create();
     $product = createProduct(500, 20);
 
@@ -152,4 +156,49 @@ it('only releases reservation when cancelling pending order', function () {
     $inventory->refresh();
     expect($inventory->quantity)->toBe(20);
     expect($inventory->reserved_quantity)->toBe(0);
+});
+
+it('does not expire or release stock for non-pending orders', function () {
+    $user = User::factory()->create();
+    $product = createProduct(500, 20);
+
+    $order = Order::factory()->confirmed()->for($user)->create();
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $product->id,
+        'quantity' => 3,
+    ]);
+
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    $inventory->update(['quantity' => 17, 'reserved_quantity' => 0]);
+
+    app(OrderService::class)->expireOrder($order);
+
+    expect($order->fresh()->status)->toBe('confirmed');
+    expect($inventory->fresh()->quantity)->toBe(17);
+    expect($inventory->fresh()->reserved_quantity)->toBe(0);
+});
+
+it('cancels order with soft-deleted coupon without crashing', function () {
+    $user = User::factory()->create();
+    $product = createProduct(500, 20);
+
+    $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'GONECOUPON',
+        'is_active' => true,
+    ]);
+
+    $order = Order::factory()->confirmed()->for($user)->create(['coupon_id' => $coupon->id]);
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ]);
+
+    $coupon->delete();
+
+    $response = $this->actingAs($user)
+        ->postJson("/api/orders/{$order->id}/cancel");
+
+    $response->assertOk();
+    expect($order->fresh()->status)->toBe('cancelled');
 });

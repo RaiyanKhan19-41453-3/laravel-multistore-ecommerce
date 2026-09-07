@@ -13,12 +13,14 @@ class BrandSeeder extends Seeder
         $brands = ['Nike', 'Adidas', 'Bata'];
 
         foreach ($brands as $index => $name) {
-            Brand::create([
-                'name' => $name,
-                'slug' => Str::slug($name),
-                'is_active' => true,
-                'sort_order' => $index,
-            ]);
+            Brand::firstOrCreate(
+                ['slug' => Str::slug($name)],
+                [
+                    'name' => $name,
+                    'is_active' => true,
+                    'sort_order' => $index,
+                ]
+            );
         }
     }
 }

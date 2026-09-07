@@ -43,6 +43,7 @@ class Order extends Model
         'delivered_at',
         'shipped_at',
         'cancelled_at',
+        'paid_at',
         'expires_at',
     ];
 
@@ -124,7 +125,7 @@ class Order extends Model
     public function scopeExpired($query)
     {
         return $query->where('status', 'pending')
-            ->where('expires_at', '!=', null)
+            ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now());
     }
 
