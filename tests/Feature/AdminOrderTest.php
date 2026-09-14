@@ -3,16 +3,6 @@
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
-use Spatie\Permission\Models\Role;
-
-function createAdmin(): User
-{
-    $user = User::factory()->create();
-    Role::findOrCreate('super-admin', 'web');
-    $user->assignRole('super-admin');
-
-    return $user;
-}
 
 function createOrderWithItems(string $status = 'pending'): Order
 {

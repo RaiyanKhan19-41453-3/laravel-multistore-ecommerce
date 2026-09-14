@@ -10,9 +10,11 @@ use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductImageController;
+use App\Http\Controllers\Admin\ProductLabelController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\ShippingController;
 use App\Http\Controllers\Admin\StoreActivityController;
+use App\Http\Controllers\Admin\ZatcaController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'role:super-admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -40,6 +42,8 @@ Route::middleware(['auth', 'role:super-admin'])->prefix('admin')->name('admin.')
     Route::delete('attributes/{attribute}/values/{value}', [AttributeController::class, 'destroyValue'])->name('attributes.values.destroy');
 
     Route::get('products', [ProductController::class, 'index'])->name('products.index');
+    Route::get('products/labels', [ProductLabelController::class, 'index'])->name('products.labels');
+    Route::get('products/labels/print', [ProductLabelController::class, 'print'])->name('products.labels.print');
     Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
     Route::post('products', [ProductController::class, 'store'])->name('products.store');
     Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
@@ -108,4 +112,7 @@ Route::middleware(['auth', 'role:super-admin'])->prefix('admin')->name('admin.')
     Route::put('couriers/{courier}/settings', [CourierController::class, 'updateSettings'])->name('couriers.settings.update');
     Route::post('couriers/{courier}/test-connection', [CourierController::class, 'testConnection'])->name('couriers.test-connection');
     Route::delete('couriers/{courier}', [CourierController::class, 'destroy'])->name('couriers.destroy');
+
+    Route::get('zatca', [ZatcaController::class, 'index'])->name('zatca.index');
+    Route::post('zatca/documents/{document}/retry', [ZatcaController::class, 'retry'])->name('zatca.retry');
 });

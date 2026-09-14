@@ -10,6 +10,7 @@ use App\Models\Discount;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\Discounts\DiscountCombinerFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -302,73 +303,20 @@ class DiscountService
 
         $automaticDiscounts = $automaticQuery->orderByDesc('priority')->get();
 
-        $bestAutomatic = null;
-        $bestAutoPriority = -1;
-        $bestAutoAmount = 0;
+        $combiner = DiscountCombinerFactory::make(
+            config('discounts.combination_mode', DiscountCombinerFactory::MODE_WATERFALL),
+            $this,
+        );
 
-        foreach ($automaticDiscounts as $discount) {
-            if ($discount->coupon_only) {
-                continue;
-            }
-
-            $eligibleSubtotal = $this->getEligibleSubtotal($discount, $productIds, $productTotals, $subtotal, $variantIds, $items);
-            $amount = $discount->getEffectiveDiscount($eligibleSubtotal);
-            $priority = $discount->priority ?? 0;
-
-            if ($amount <= 0) {
-                continue;
-            }
-
-            if ($priority > $bestAutoPriority || ($priority === $bestAutoPriority && $amount > $bestAutoAmount)) {
-                $bestAutoPriority = $priority;
-                $bestAutoAmount = $amount;
-                $bestAutomatic = [
-                    'discount' => $discount,
-                    'amount' => $amount,
-                ];
-            }
-        }
-
-        $couponDiscount = null;
-
-        if ($coupon) {
-            $reducedSubtotal = max(0, $subtotal - ($bestAutomatic['amount'] ?? 0));
-            $couponEligibleSubtotal = $this->getEligibleSubtotal(
-                $coupon->discount, $productIds, $productTotals, $reducedSubtotal, $variantIds, $items
-            );
-            $amount = $coupon->discount->getEffectiveDiscount($couponEligibleSubtotal);
-
-            if ($amount > 0) {
-                $couponDiscount = [
-                    'discount' => $coupon->discount,
-                    'coupon' => $coupon,
-                    'amount' => $amount,
-                ];
-            }
-        }
-
-        if ($couponDiscount && $bestAutomatic) {
-            $autoStackable = (bool) $bestAutomatic['discount']->stackable;
-            $couponStackable = (bool) $couponDiscount['discount']->stackable;
-
-            if ($autoStackable && $couponStackable) {
-                return [
-                    'discounts' => [$bestAutomatic, $couponDiscount],
-                    'total_amount' => round($bestAutomatic['amount'] + $couponDiscount['amount'], 2),
-                    'stacked' => true,
-                ];
-            }
-
-            // Not stackable: the better deal wins. Coupon wins ties as the
-            // explicit customer choice.
-            if ($couponDiscount['amount'] >= $bestAutomatic['amount']) {
-                return $couponDiscount;
-            }
-
-            return $bestAutomatic;
-        }
-
-        return $couponDiscount ?? $bestAutomatic;
+        return $combiner->combine(
+            $automaticDiscounts,
+            $coupon ? ['discount' => $coupon->discount, 'coupon' => $coupon] : null,
+            $subtotal,
+            $productIds,
+            $productTotals,
+            $variantIds,
+            $items,
+        );
     }
 
     public function getPerItemDiscountAmounts(Discount $discount, array $productIds, array $productTotals, array $variantIds = [], array $items = []): array
@@ -434,6 +382,12 @@ class DiscountService
             }
         } else {
             $eligibleProductIds = $this->getEligibleProductIds($discount, $productIds, $variantIds);
+
+            if (empty($eligibleProductIds) && $this->getTargeting($discount)['level'] === 'sitewide') {
+                $eligibleProductIds = ! empty($items)
+                    ? array_values(array_unique(array_filter(array_column($items, 'product_id'))))
+                    : $productIds;
+            }
 
             if (empty($eligibleProductIds)) {
                 return [];
@@ -589,7 +543,7 @@ class DiscountService
         return array_unique($eligibleProductIds);
     }
 
-    private function getEligibleSubtotal(Discount $discount, array $productIds, array $productTotals, float $fallbackSubtotal, array $variantIds = [], array $items = []): float
+    public function getEligibleSubtotal(Discount $discount, array $productIds, array $productTotals, float $fallbackSubtotal, array $variantIds = [], array $items = []): float
     {
         if (empty($productTotals) && empty($items)) {
             return $fallbackSubtotal;
@@ -612,10 +566,24 @@ class DiscountService
 
         $eligibleProductIds = $this->getEligibleProductIds($discount, $productIds, $variantIds);
 
+        if (empty($eligibleProductIds) && $this->getTargeting($discount)['level'] === 'sitewide') {
+            $eligibleProductIds = ! empty($items)
+                ? array_values(array_unique(array_filter(array_column($items, 'product_id'))))
+                : $productIds;
+        }
+
         if (! empty($eligibleProductIds)) {
             $eligibleSubtotal = 0;
             foreach ($eligibleProductIds as $pid) {
                 $eligibleSubtotal += $productTotals[$pid] ?? 0;
+            }
+
+            if ($eligibleSubtotal <= 0 && ! empty($items)) {
+                foreach ($items as $item) {
+                    if (in_array($item['product_id'] ?? null, $eligibleProductIds)) {
+                        $eligibleSubtotal += $item['total'];
+                    }
+                }
             }
 
             if ($eligibleSubtotal > 0) {

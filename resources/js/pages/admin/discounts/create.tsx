@@ -144,9 +144,9 @@ export default function DiscountCreate({
                             </div>
 
                             <div className="grid gap-2">
-                                    <Label htmlFor="priority">Priority (higher wins)</Label>
+                                    <Label htmlFor="priority">Priority</Label>
                                     <Input id="priority" type="number" min="0" value={data.priority} onChange={(e) => setData('priority', e.target.value)} className="w-48" />
-                                    <p className="text-xs text-neutral-500">When multiple discounts apply, the one with higher priority wins.</p>
+                                    <p className="text-xs text-neutral-500">Decides order and ties: higher priority claims lines first (waterfall) or wins ties (best-per-line).</p>
                                 </div>
                         </div>
                     </div>

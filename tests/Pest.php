@@ -9,6 +9,7 @@ use App\Models\ShippingRate;
 use App\Models\ShippingZone;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /*
@@ -121,4 +122,44 @@ function shippingData(): array
         'shipping_country' => 'Bangladesh',
         'shipping_rate_id' => $rate->id,
     ];
+}
+
+function ecKeypair(): array
+{
+    $key = openssl_pkey_new([
+        'curve_name' => 'secp256k1',
+        'private_key_type' => OPENSSL_KEYTYPE_EC,
+    ]);
+
+    openssl_pkey_export($key, $privatePem);
+
+    $csr = openssl_csr_new(['CN' => 'test-egs'], $key, ['digest_alg' => 'sha256']);
+    $cert = openssl_csr_sign($csr, null, $key, 30, ['digest_alg' => 'sha256']);
+    openssl_x509_export($cert, $certPem);
+
+    return [$privatePem, $certPem];
+}
+
+function decodeTlv(string $raw): array
+{
+    $tags = [];
+    $pos = 0;
+
+    while ($pos < strlen($raw)) {
+        $tag = ord($raw[$pos]);
+        $len = ord($raw[$pos + 1]);
+        $tags[$tag] = substr($raw, $pos + 2, $len);
+        $pos += 2 + $len;
+    }
+
+    return $tags;
+}
+
+function createAdmin(): User
+{
+    $user = User::factory()->create();
+    Role::findOrCreate('super-admin', 'web');
+    $user->assignRole('super-admin');
+
+    return $user;
 }

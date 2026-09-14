@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SubmitZatcaDocument;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Discount;
@@ -11,6 +12,8 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\User;
+use App\Models\ZatcaDocument;
+use App\Services\Zatca\ZatcaDocumentService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -21,12 +24,14 @@ class OrderService
         protected InventoryService $inventoryService,
         protected DiscountService $discountService,
         protected ShippingService $shippingService,
+        protected TaxService $taxService,
+        protected ZatcaDocumentService $zatcaDocuments,
     ) {}
 
     public function createFromCart(Cart $cart, ?User $user, array $shippingData, string $paymentMethod): Order
     {
         return DB::transaction(function () use ($cart, $user, $shippingData, $paymentMethod) {
-            $cart->load(['items.product', 'items.productVariant', 'coupon.discount']);
+            $cart->load(['items.product.categories', 'items.productVariant', 'coupon.discount']);
 
             if ($cart->items->isEmpty()) {
                 throw new \InvalidArgumentException('Cart is empty.');
@@ -126,6 +131,9 @@ class OrderService
 
             $total = round($discountedSubtotal + $shippingCost, 2);
 
+            $taxAmount = $this->calculateOrderTax($cart, $subtotal, $discountTotal, $shippingCost);
+            $total = round($total + $taxAmount, 2);
+
             $order = Order::create([
                 'user_id' => $user?->id,
                 'guest_email' => $user ? null : ($shippingData['guest_email'] ?? null),
@@ -134,7 +142,7 @@ class OrderService
                 'subtotal' => $subtotal,
                 'discount_total' => $discountTotal,
                 'shipping_cost' => $shippingCost,
-                'tax_amount' => 0,
+                'tax_amount' => $taxAmount,
                 'total' => $total,
                 'coupon_id' => $cart->coupon_id,
                 'coupon_code' => $couponCode,
@@ -161,12 +169,13 @@ class OrderService
                 $user, $shippingData['guest_email'] ?? null
             );
 
-            if ($cart->coupon && in_array($cart->coupon->discount_id, $discountIds)) {
+            if ($cart->coupon) {
                 $this->discountService->assertCouponRedeemable($cart->coupon, $couponIdentifier);
+            }
 
-                if ($couponIdentifier !== null) {
-                    $this->discountService->reserveCouponRedemption($cart->coupon, $couponIdentifier, $order->id);
-                }
+            if ($cart->coupon && in_array($cart->coupon->discount_id, $discountIds)
+                && $couponIdentifier !== null) {
+                $this->discountService->reserveCouponRedemption($cart->coupon, $couponIdentifier, $order->id);
             }
 
             // Cart reservations transfer to the order: release the cart holds
@@ -209,6 +218,7 @@ class OrderService
             }
 
             $this->incrementAutomaticDiscountUsage($order);
+            $this->queueZatcaDocument($order);
         });
     }
 
@@ -228,6 +238,7 @@ class OrderService
             }
 
             $this->incrementAutomaticDiscountUsage($order);
+            $this->queueZatcaDocument($order);
         });
     }
 
@@ -354,6 +365,58 @@ class OrderService
                     "Insufficient stock for '{$product->name}'. Available: {$inventory->quantity}, requested: {$item->quantity}."
                 );
             }
+        }
+    }
+
+    /**
+     * VAT on the discounted value of taxable lines plus shipping.
+     * Exempt lines (zero-rated/exempt categories) are excluded pro-rata.
+     * Returns 0 when tax is disabled for this deployment.
+     */
+    private function calculateOrderTax(Cart $cart, float $subtotal, float $discountTotal, float $shippingCost): float
+    {
+        if (! $this->taxService->enabled() || $subtotal <= 0) {
+            return 0.0;
+        }
+
+        $taxableBase = $shippingCost;
+
+        foreach ($cart->items as $item) {
+            if ($this->taxService->isExempt($item->product)) {
+                continue;
+            }
+
+            $lineTotal = round($item->getUnitPrice() * $item->quantity, 2);
+            $taxableBase += $lineTotal - ($discountTotal * ($lineTotal / $subtotal));
+        }
+
+        return $this->taxService->vatFor(round(max(0, $taxableBase), 2));
+    }
+
+    /**
+     * Queue a simplified (B2C) ZATCA document for a confirmed order.
+     * No-op unless the deployment can submit. Never throws: invoicing
+     * must not break order confirmation.
+     */
+    private function queueZatcaDocument(Order $order): void
+    {
+        try {
+            if (! $this->zatcaDocuments->canSubmit()) {
+                return;
+            }
+
+            if (ZatcaDocument::where('order_id', $order->id)->exists()) {
+                return;
+            }
+
+            $document = $this->zatcaDocuments->buildForOrder($order, 'simplified');
+
+            SubmitZatcaDocument::dispatch($document->id);
+        } catch (\Throwable $e) {
+            Log::warning('ZATCA document queueing failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

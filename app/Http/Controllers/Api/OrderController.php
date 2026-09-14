@@ -6,6 +6,8 @@ use App\Helpers\PhoneHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\OrderService;
+use App\Services\TaxService;
+use App\Services\Zatca\ZatcaQrService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,6 +15,8 @@ class OrderController extends Controller
 {
     public function __construct(
         protected OrderService $orderService,
+        protected TaxService $taxService,
+        protected ZatcaQrService $zatcaQr,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -113,11 +117,48 @@ class OrderController extends Controller
 
         $order->payments->each(fn ($payment) => $payment->makeHidden('gateway_response'));
 
+        $response = array_merge($order->toArray(), [
+            'applied_discounts' => $discounts,
+        ]);
+
+        if ($zatca = $this->zatcaQrFor($order)) {
+            $response['zatca'] = $zatca;
+        }
+
         return response()->json([
             'success' => true,
-            'data' => array_merge($order->toArray(), [
-                'applied_discounts' => $discounts,
-            ]),
+            'data' => $response,
         ]);
+    }
+
+    /**
+     * Phase 1 QR payload for the order, or null when ZATCA is off
+     * or the seller profile is incomplete.
+     */
+    private function zatcaQrFor(Order $order): ?array
+    {
+        if (! config('zatca.enabled', false)) {
+            return null;
+        }
+
+        $seller = config('zatca.seller', []);
+
+        if (! $this->taxService->hasValidSellerProfile()) {
+            return null;
+        }
+
+        $payload = $this->zatcaQr->phaseOnePayload(
+            $seller['name_ar'],
+            $seller['vat_number'],
+            $order->created_at->toIso8601String(),
+            number_format((float) $order->total, 2, '.', ''),
+            number_format((float) $order->tax_amount, 2, '.', ''),
+        );
+
+        return [
+            'seller_name_ar' => $seller['name_ar'],
+            'vat_number' => $seller['vat_number'],
+            'qr_svg' => $this->zatcaQr->svg($payload),
+        ];
     }
 }

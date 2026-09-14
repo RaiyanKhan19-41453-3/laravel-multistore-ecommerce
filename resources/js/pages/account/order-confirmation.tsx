@@ -43,6 +43,11 @@ interface Order {
     items: OrderItem[];
     applied_discounts: AppliedDiscount[];
     shipments: Shipment[];
+    zatca?: {
+        seller_name_ar: string;
+        vat_number: string;
+        qr_svg: string;
+    } | null;
 }
 
 interface Shipment {
@@ -391,6 +396,25 @@ export default function OrderConfirmation() {
                                 : `Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}`}
                     </div>
                 </div>
+
+                {/* Tax Invoice (ZATCA) */}
+                {order.zatca && (
+                    <div className="mb-6 rounded-lg border border-[var(--store-border)] p-6">
+                        <h2 className="mb-2 text-lg font-semibold">Tax Invoice</h2>
+                        <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
+                            <div
+                                className="h-36 w-36 flex-shrink-0 [&_svg]:h-full [&_svg]:w-full"
+                                dangerouslySetInnerHTML={{ __html: order.zatca.qr_svg }}
+                            />
+                            <div className="space-y-1 text-center text-sm sm:text-left">
+                                <p className="text-lg font-semibold" dir="rtl" lang="ar">{order.zatca.seller_name_ar}</p>
+                                <p><span className="text-[var(--store-muted)]">VAT №:</span> <span className="font-mono">{order.zatca.vat_number}</span></p>
+                                <p><span className="text-[var(--store-muted)]">VAT included:</span> {formatPrice(order.tax_amount)}</p>
+                                <p className="text-xs text-[var(--store-muted)]">Scan to verify this invoice with ZATCA.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tracking */}
                 {order.shipments && order.shipments.length > 0 && (

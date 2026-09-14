@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Eye, Image, Layers, Pencil, Plus, SlidersHorizontal, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, Image, Layers, Pencil, Plus, Printer, SlidersHorizontal, Star, Trash2, X } from 'lucide-react';
 import { FormEventHandler } from 'react';
 
 interface Product {
@@ -156,12 +156,20 @@ export default function ProductsIndex({
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                     <Heading title="Products" description="Manage your products" />
-                    <Button asChild>
-                        <Link href={route('admin.products.create')}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Create Product
-                        </Link>
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href={route('admin.products.labels')}>
+                                <Printer className="mr-2 h-4 w-4" />
+                                Print Labels
+                            </Link>
+                        </Button>
+                        <Button asChild>
+                            <Link href={route('admin.products.create')}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create Product
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-3 rounded-xl border bg-neutral-50/50 p-4 dark:bg-neutral-800/30">
