@@ -17,6 +17,8 @@ class CourierSeeder extends Seeder
             ['name' => 'Ecourier', 'code' => 'ecourier', 'sort_order' => 5],
             ['name' => 'Steadfast', 'code' => 'steadfast', 'sort_order' => 6],
             ['name' => 'RedX', 'code' => 'redx', 'sort_order' => 7],
+            ['name' => 'SMSA Express', 'code' => 'smsa', 'sort_order' => 8],
+            ['name' => 'Aramex', 'code' => 'aramex', 'sort_order' => 9],
             ['name' => 'Other', 'code' => 'other', 'sort_order' => 99],
         ];
 

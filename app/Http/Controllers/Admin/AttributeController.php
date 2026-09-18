@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
+use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,9 +31,11 @@ class AttributeController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:attributes,slug',
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('attributes', 'slug')->where('store_id', $storeId)],
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
         ]);
@@ -45,9 +49,11 @@ class AttributeController extends Controller
 
     public function update(Request $request, Attribute $attribute): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:attributes,slug,'.$attribute->id,
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('attributes', 'slug')->ignore($attribute->id)->where('store_id', $storeId)],
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
         ]);
@@ -92,6 +98,10 @@ class AttributeController extends Controller
 
     public function updateValue(Request $request, Attribute $attribute, AttributeValue $value): RedirectResponse
     {
+        if ($value->attribute_id !== $attribute->id) {
+            abort(422, 'Value does not belong to this attribute.');
+        }
+
         $validated = $request->validate([
             'value' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:attribute_values,slug,'.$value->id.',id,attribute_id,'.$attribute->id,
@@ -108,6 +118,10 @@ class AttributeController extends Controller
 
     public function toggleValue(Attribute $attribute, AttributeValue $value): RedirectResponse
     {
+        if ($value->attribute_id !== $attribute->id) {
+            abort(422, 'Value does not belong to this attribute.');
+        }
+
         $value->update(['is_active' => ! $value->is_active]);
 
         return to_route('admin.attributes.index');
@@ -115,6 +129,10 @@ class AttributeController extends Controller
 
     public function destroyValue(Attribute $attribute, AttributeValue $value): RedirectResponse
     {
+        if ($value->attribute_id !== $attribute->id) {
+            abort(422, 'Value does not belong to this attribute.');
+        }
+
         $value->delete();
 
         return to_route('admin.attributes.index');

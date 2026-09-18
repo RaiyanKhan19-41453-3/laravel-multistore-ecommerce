@@ -1,0 +1,260 @@
+<?php
+
+use App\Models\CmsPage;
+use App\Models\Inventory;
+use App\Models\Product;
+use App\Models\Review;
+use App\Models\Wishlist;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+
+uses(RefreshDatabase::class);
+
+it('lists approved reviews for a product', function () {
+    $product = createProduct();
+    $user = createUser();
+    Review::factory()->approved()->create(['product_id' => $product->id, 'user_id' => $user->id, 'rating' => 5]);
+    Review::factory()->pending()->create(['product_id' => $product->id, 'user_id' => createUser()->id, 'rating' => 2]);
+
+    $response = $this->getJson("/api/products/{$product->slug}/reviews");
+
+    $response->assertOk()
+        ->assertJsonPath('data.summary.total', 1)
+        ->assertJsonFragment(['average' => 5.0]);
+});
+
+it('creates a review when authenticated', function () {
+    $user = createUser();
+    $product = createProduct();
+
+    $response = $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 4,
+        'title' => 'Great product',
+        'body' => 'Really enjoyed it.',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.rating', 4);
+
+    $this->assertDatabaseHas('reviews', [
+        'product_id' => $product->id,
+        'user_id' => $user->id,
+        'is_approved' => false,
+    ]);
+});
+
+it('rejects duplicate review from same user', function () {
+    $user = createUser();
+    $product = createProduct();
+    Review::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+
+    $response = $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+    ]);
+
+    $response->assertStatus(422);
+});
+
+it('validates review rating range', function () {
+    $user = createUser();
+    $product = createProduct();
+
+    $response = $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 6,
+    ]);
+
+    $response->assertStatus(422);
+});
+
+it('adds product to wishlist', function () {
+    $user = createUser();
+    $product = createProduct();
+
+    $response = $this->actingAs($user)->postJson("/api/wishlist/{$product->slug}/toggle");
+
+    $response->assertSuccessful()
+        ->assertJsonPath('data.wishlisted', true);
+
+    $this->assertDatabaseHas('wishlists', [
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+    ]);
+});
+
+it('removes product from wishlist on second toggle', function () {
+    $user = createUser();
+    $product = createProduct();
+    Wishlist::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+
+    $response = $this->actingAs($user)->postJson("/api/wishlist/{$product->slug}/toggle");
+
+    $response->assertOk()
+        ->assertJsonPath('data.wishlisted', false);
+
+    $this->assertDatabaseMissing('wishlists', [
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+    ]);
+});
+
+it('lists user wishlist', function () {
+    $user = createUser();
+    $product = createProduct();
+    Wishlist::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+
+    $response = $this->actingAs($user)->getJson('/api/wishlist');
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data.data');
+});
+
+it('checks wishlisted product ids', function () {
+    $user = createUser();
+    $product = createProduct();
+    Wishlist::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+
+    $response = $this->actingAs($user)->getJson("/api/wishlist/check?product_ids[]={$product->id}");
+
+    $response->assertOk()
+        ->assertJsonPath('data', [$product->id]);
+});
+
+it('lists published CMS pages', function () {
+    CmsPage::factory()->published()->create(['title' => 'About Us', 'slug' => 'about-us']);
+    CmsPage::factory()->draft()->create(['title' => 'Draft Page', 'slug' => 'draft-page']);
+
+    $response = $this->getJson('/api/pages');
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data');
+});
+
+it('shows a published CMS page by slug', function () {
+    CmsPage::factory()->published()->create(['slug' => 'terms', 'title' => 'Terms']);
+
+    $response = $this->getJson('/api/pages/terms');
+
+    $response->assertOk()
+        ->assertJsonPath('data.slug', 'terms');
+});
+
+it('returns 404 for unpublished CMS page', function () {
+    CmsPage::factory()->draft()->create(['slug' => 'secret']);
+
+    $this->getJson('/api/pages/secret')->assertStatus(404);
+});
+
+it('filters products by price range', function () {
+    Product::factory()->create(['price' => 50, 'is_active' => true]);
+    Product::factory()->create(['price' => 200, 'is_active' => true]);
+    Product::factory()->create(['price' => 500, 'is_active' => true]);
+
+    $response = $this->getJson('/api/products?min_price=100&max_price=300');
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data.data');
+});
+
+it('includes review summary in product list', function () {
+    $product = createProduct();
+    Review::factory()->approved()->count(3)->create(['product_id' => $product->id, 'rating' => 4]);
+
+    $response = $this->getJson('/api/products');
+
+    $response->assertOk();
+    $productData = collect($response->json('data.data'))->firstWhere('id', $product->id);
+    expect($productData['review_summary']['total'])->toBe(3);
+});
+
+it('includes review summary in product detail', function () {
+    $product = createProduct();
+    Review::factory()->approved()->create(['product_id' => $product->id, 'rating' => 5]);
+    Review::factory()->approved()->create(['product_id' => $product->id, 'rating' => 3]);
+
+    $response = $this->getJson("/api/products/{$product->slug}");
+
+    $response->assertOk()
+        ->assertJsonPath('data.review_summary.total', 2)
+        ->assertJsonFragment(['average' => 4.0]);
+});
+
+it('admin can approve review', function () {
+    $admin = createAdmin();
+    $review = Review::factory()->pending()->create();
+
+    $response = $this->actingAs($admin)->post("/admin/reviews/{$review->id}/approve");
+
+    $response->assertRedirect();
+    $this->assertDatabaseHas('reviews', ['id' => $review->id, 'is_approved' => true]);
+});
+
+it('admin can delete review', function () {
+    $admin = createAdmin();
+    $review = Review::factory()->create();
+
+    $response = $this->actingAs($admin)->delete("/admin/reviews/{$review->id}");
+
+    $response->assertRedirect();
+    $this->assertDatabaseMissing('reviews', ['id' => $review->id]);
+});
+
+it('admin can CRUD CMS pages', function () {
+    $admin = createAdmin();
+
+    $response = $this->actingAs($admin)->post('/admin/pages', [
+        'title' => 'Privacy Policy',
+        'body' => '<p>We respect your privacy.</p>',
+        'is_published' => true,
+    ]);
+
+    $response->assertRedirect();
+    $this->assertDatabaseHas('cms_pages', ['title' => 'Privacy Policy']);
+
+    $page = CmsPage::where('slug', 'privacy-policy')->first();
+
+    $response = $this->actingAs($admin)->put("/admin/pages/{$page->id}", [
+        'title' => 'Privacy Policy Updated',
+        'body' => '<p>Updated.</p>',
+        'is_published' => true,
+    ]);
+
+    $response->assertRedirect();
+    $this->assertDatabaseHas('cms_pages', ['id' => $page->id, 'title' => 'Privacy Policy Updated']);
+
+    $response = $this->actingAs($admin)->delete("/admin/pages/{$page->id}");
+    $response->assertRedirect();
+    $this->assertSoftDeleted('cms_pages', ['id' => $page->id]);
+});
+
+it('caps oversized wishlist check input', function () {
+    $user = createUser();
+    $product = createProduct();
+    Wishlist::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+
+    $ids = array_merge([$product->id], range(100000, 100200));
+
+    $response = $this->actingAs($user)->getJson('/api/wishlist/check?'.http_build_query(['product_ids' => $ids]));
+
+    $response->assertOk()->assertJsonPath('data', [$product->id]);
+});
+
+it('loads wishlist inventory without per-item queries', function () {
+    $user = createUser();
+
+    foreach (range(1, 3) as $i) {
+        $product = Product::factory()->create(['is_active' => true, 'price' => 100]);
+        Inventory::factory()->forProduct($product)->withQuantity(5)->create();
+        Wishlist::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+    }
+
+    $inventoryQueries = 0;
+    DB::listen(function ($query) use (&$inventoryQueries) {
+        if (str_contains($query->sql, '"inventories"')) {
+            $inventoryQueries++;
+        }
+    });
+
+    $this->actingAs($user)->getJson('/api/wishlist')->assertOk();
+
+    expect($inventoryQueries)->toBeLessThanOrEqual(1);
+});

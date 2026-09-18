@@ -1,10 +1,12 @@
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore, setAuth, type StoreUser } from '@/lib/auth';
 import { getGuestToken } from '@/lib/guest-token';
+import { useT } from '@/lib/store';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function StoreRegister() {
+    const t = useT();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -51,15 +53,19 @@ export default function StoreRegister() {
     };
 
     return (
-        <StoreLayout title="Register">
-            <div className="mx-auto max-w-md px-4 py-12">
-                <h1 className="mb-6 text-center text-2xl font-bold">Create an account</h1>
+        <StoreLayout title={t('store.register')}>
+            <div className="mx-auto max-w-md px-4 py-12 md:py-16">
+                <div className="rounded-xl border border-[var(--store-border)] bg-[var(--store-card)] p-6 shadow-[var(--store-shadow)] md:p-8">
+                    <h1 className="text-center text-2xl font-bold tracking-tight">{t('store.register_title')}</h1>
+                    <p className="mt-2 text-center text-sm text-[var(--store-muted)]">{t('store.register_subtitle')}</p>
 
-                {error && (
-                    <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-                )}
+                    {error && (
+                        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+                            {error}
+                        </div>
+                    )}
 
-                <form onSubmit={submit} className="flex flex-col gap-4">
+                    <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
                     <div>
                         <label htmlFor="name" className="mb-1 block text-sm font-medium">
                             Name
@@ -70,7 +76,7 @@ export default function StoreRegister() {
                             required
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                             placeholder="Your name"
                         />
                         {fieldErrors.name && <p className="mt-1 text-xs text-red-500">{fieldErrors.name}</p>}
@@ -86,7 +92,7 @@ export default function StoreRegister() {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                             placeholder="you@example.com"
                         />
                         {fieldErrors.email && <p className="mt-1 text-xs text-red-500">{fieldErrors.email}</p>}
@@ -102,7 +108,7 @@ export default function StoreRegister() {
                             required
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
-                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                             placeholder="01XXXXXXXXX"
                         />
                         {fieldErrors.phone && <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>}
@@ -118,7 +124,7 @@ export default function StoreRegister() {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                             placeholder="Min 8 characters"
                         />
                         {fieldErrors.password && <p className="mt-1 text-xs text-red-500">{fieldErrors.password}</p>}
@@ -134,7 +140,7 @@ export default function StoreRegister() {
                             required
                             value={passwordConfirmation}
                             onChange={(e) => setPasswordConfirmation(e.target.value)}
-                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                             placeholder="Repeat password"
                         />
                     </div>
@@ -142,18 +148,19 @@ export default function StoreRegister() {
                     <button
                         type="submit"
                         disabled={busy}
-                        className="rounded-lg bg-[var(--store-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                        className="rounded-lg bg-[var(--store-accent)] px-4 py-3 text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-none disabled:opacity-50"
                     >
-                        {busy ? 'Creating account...' : 'Register'}
+                        {busy ? 'Creating account...' : t('store.register')}
                     </button>
                 </form>
 
                 <p className="mt-6 text-center text-sm text-[var(--store-muted)]">
                     Already have an account?{' '}
-                    <Link href="/account/login" className="text-[var(--store-accent)] hover:underline">
-                        Login
+                    <Link href="/account/login" className="font-semibold text-[var(--store-accent)] hover:underline">
+                        {t('store.login')}
                     </Link>
                 </p>
+                </div>
             </div>
         </StoreLayout>
     );

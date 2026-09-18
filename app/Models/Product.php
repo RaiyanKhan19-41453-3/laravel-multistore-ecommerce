@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedCatalog;
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,15 +16,18 @@ use Illuminate\Support\Str;
 
 class Product extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasLocalizedCatalog, SoftDeletes;
 
     protected $fillable = [
         'brand_id',
         'type',
         'name',
+        'name_ar',
         'slug',
         'description',
+        'description_ar',
         'short_description',
+        'short_description_ar',
         'sku',
         'barcode',
         'price',
@@ -48,6 +53,8 @@ class Product extends Model
 
     protected static function booted(): void
     {
+        static::addGlobalScope(new BelongsToStore);
+
         static::creating(function (Product $product) {
             if (empty($product->slug)) {
                 $product->slug = Str::slug($product->name);
@@ -96,6 +103,16 @@ class Product extends Model
     public function discounts(): MorphToMany
     {
         return $this->morphToMany(Discount::class, 'discountable');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function wishlists(): HasMany
+    {
+        return $this->hasMany(Wishlist::class);
     }
 
     public function isVariable(): bool

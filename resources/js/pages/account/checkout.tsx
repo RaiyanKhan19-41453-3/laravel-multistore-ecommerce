@@ -333,11 +333,29 @@ export default function Checkout() {
 
     return (
         <StoreLayout title="Checkout">
-            <div className="mx-auto max-w-4xl px-4 py-8">
-                <h1 className="mb-6 text-2xl font-bold">Checkout</h1>
+            <div className="store-container py-8">
+                <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Checkout</h1>
+
+                {/* Steps */}
+                <ol className="mt-5 flex items-center gap-2 text-xs font-semibold">
+                    <li className="flex items-center gap-1.5 rounded-lg border border-[var(--store-border)] px-3.5 py-1.5 text-[var(--store-muted)]">
+                        <span className="flex h-4 w-4 items-center justify-center rounded-lg bg-[var(--store-success-soft)] text-[10px] text-[var(--store-success)]">✓</span>
+                        Cart
+                    </li>
+                    <li className="h-px w-8 bg-[var(--store-border)]" />
+                    <li className="flex items-center gap-1.5 rounded-lg bg-[var(--store-text)] px-3.5 py-1.5 text-[var(--store-bg)]">
+                        <span className="flex h-4 w-4 items-center justify-center rounded-lg bg-[var(--store-bg)] text-[10px] text-[var(--store-text)]">2</span>
+                        Details
+                    </li>
+                    <li className="h-px w-8 bg-[var(--store-border)]" />
+                    <li className="flex items-center gap-1.5 rounded-lg border border-[var(--store-border)] px-3.5 py-1.5 text-[var(--store-muted)]">
+                        <span className="flex h-4 w-4 items-center justify-center rounded-lg bg-[var(--store-card-hover)] text-[10px]">3</span>
+                        Done
+                    </li>
+                </ol>
 
                 {error && (
-                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+                    <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
                         {error}
                     </div>
                 )}
@@ -348,7 +366,7 @@ export default function Checkout() {
                         <div className="space-y-6 lg:col-span-2">
                             {/* Contact Information — guests only */}
                             {!user && (
-                                <section className="rounded-lg border border-[var(--store-border)] p-5">
+                                <section className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
                                     <h2 className="mb-4 text-lg font-semibold">Contact Information</h2>
                                     <div className="mb-4">
                                         <label className="mb-1 block text-sm font-medium">Email</label>
@@ -358,7 +376,7 @@ export default function Checkout() {
                                             value={form.guest_email}
                                             onChange={(e) => handleEmailChange(e.target.value)}
                                             onBlur={handleEmailBlur}
-                                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                             placeholder="you@example.com"
                                         />
                                         {fieldErrors.guest_email && (
@@ -372,7 +390,7 @@ export default function Checkout() {
                                             required
                                             value={form.phone}
                                             onChange={(e) => setField('phone', e.target.value)}
-                                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                             placeholder="01XXXXXXXXX"
                                         />
                                         {fieldErrors.phone && (
@@ -414,7 +432,7 @@ export default function Checkout() {
                             )}
 
                             {/* Shipping Address */}
-                            <section className="rounded-lg border border-[var(--store-border)] p-5">
+                            <section className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Shipping Address</h2>
                                 <div className="space-y-4">
                                     <div>
@@ -424,7 +442,7 @@ export default function Checkout() {
                                             required
                                             value={form.shipping_name}
                                             onChange={(e) => setField('shipping_name', e.target.value)}
-                                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                         />
                                         {fieldErrors.shipping_name && (
                                             <p className="mt-1 text-xs text-red-500">{fieldErrors.shipping_name}</p>
@@ -455,7 +473,7 @@ export default function Checkout() {
                                                     required
                                                     value={form.delivery_phone}
                                                     onChange={(e) => setField('delivery_phone', e.target.value)}
-                                                    className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                                    className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                                     placeholder="01XXXXXXXXX"
                                                 />
                                                 {fieldErrors.delivery_phone && (
@@ -472,7 +490,7 @@ export default function Checkout() {
                                             rows={2}
                                             value={form.shipping_address}
                                             onChange={(e) => setField('shipping_address', e.target.value)}
-                                            className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                             placeholder="Street address, house number, apartment..."
                                         />
                                         {fieldErrors.shipping_address && (
@@ -486,7 +504,7 @@ export default function Checkout() {
                                             required
                                             value={form.shipping_city}
                                             onChange={(e) => handleCityChange(e.target.value)}
-                                            className="w-full rounded-md border border-[var(--store-border)] bg-white px-3 py-2 text-sm dark:bg-[var(--store-card)]"
+                                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--store-accent)]"
                                         >
                                             <option value="">Select a city</option>
                                             {availableCities.map((city) => (
@@ -502,7 +520,7 @@ export default function Checkout() {
                                             <select
                                                 value={form.shipping_state}
                                                 onChange={(e) => setField('shipping_state', e.target.value)}
-                                                className="w-full rounded-md border border-[var(--store-border)] bg-white px-3 py-2 text-sm dark:bg-[var(--store-card)]"
+                                                className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--store-accent)]"
                                             >
                                                 <option value="">Select a division (optional)</option>
                                                 {BD_DIVISIONS.map((division) => (
@@ -516,7 +534,7 @@ export default function Checkout() {
                                                 type="text"
                                                 value={form.shipping_postal_code}
                                                 onChange={(e) => setField('shipping_postal_code', e.target.value)}
-                                                className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                                className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                             />
                                         </div>
                                     </div>
@@ -525,7 +543,7 @@ export default function Checkout() {
 
                             {/* Shipping Method */}
                             {form.shipping_city && (
-                                <section className="rounded-lg border border-[var(--store-border)] p-5">
+                                <section className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
                                     <h2 className="mb-1 text-lg font-semibold">Shipping Method</h2>
                                     <p className="mb-4 text-xs text-[var(--store-muted)]">Costs shown are estimates. Final amount is calculated server-side when you place your order.</p>
                                     {shippingLoading ? (
@@ -575,7 +593,7 @@ export default function Checkout() {
                             )}
 
                             {/* Payment Method */}
-                            <section className="rounded-lg border border-[var(--store-border)] p-5">
+                            <section className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Payment Method</h2>
                                 <div className="space-y-2">
                                     {paymentMethods.map((method) => (
@@ -610,13 +628,13 @@ export default function Checkout() {
                             </section>
 
                             {/* Notes */}
-                            <section className="rounded-lg border border-[var(--store-border)] p-5">
+                            <section className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Order Notes (optional)</h2>
                                 <textarea
                                     rows={2}
                                     value={form.notes}
                                     onChange={(e) => setField('notes', e.target.value)}
-                                    className="w-full rounded-md border border-[var(--store-border)] px-3 py-2 text-sm"
+                                    className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition placeholder:text-[var(--store-muted)] focus:border-[var(--store-accent)]"
                                     placeholder="Any special instructions for delivery..."
                                 />
                             </section>
@@ -624,7 +642,7 @@ export default function Checkout() {
 
                         {/* Order Summary */}
                         <div className="lg:col-span-1">
-                            <div className="sticky top-24 rounded-lg border border-[var(--store-border)] p-5">
+                            <div className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 lg:sticky lg:top-24 md:p-6">
                                 <h2 className="mb-4 text-lg font-semibold">Order Summary</h2>
 
                                 <div className="space-y-3 text-sm">
@@ -684,7 +702,7 @@ export default function Checkout() {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="mt-5 block w-full rounded-lg bg-[var(--store-accent)] py-2.5 text-center text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                                    className="mt-5 block w-full rounded-lg bg-[var(--store-accent)] py-3 text-center text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-none disabled:opacity-50"
                                 >
                                     {submitting ? 'Placing order...' : 'Place Order'}
                                 </button>

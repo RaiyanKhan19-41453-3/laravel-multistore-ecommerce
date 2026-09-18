@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -30,6 +31,8 @@ class Attribute extends Model
 
     protected static function booted(): void
     {
+        static::addGlobalScope(new BelongsToStore);
+
         static::creating(function (Attribute $attribute) {
             if (empty($attribute->slug)) {
                 $attribute->slug = Str::slug($attribute->name);

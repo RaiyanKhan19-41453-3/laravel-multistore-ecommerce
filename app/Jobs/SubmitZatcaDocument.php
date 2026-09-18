@@ -40,7 +40,10 @@ class SubmitZatcaDocument implements ShouldQueue
             return;
         }
 
-        $device = ZatcaDevice::find(config('zatca.device.serial', 'default'));
+        $device = $document->device_serial
+            ? ZatcaDevice::find($document->device_serial)
+            : null;
+        $device ??= ZatcaDevice::find(config('zatca.device.serial', 'default'));
 
         if (! $device?->isOnboarded()) {
             Log::warning('ZATCA submit skipped: device not onboarded', ['document_id' => $document->id]);

@@ -26,11 +26,12 @@ class OrderService
         protected ShippingService $shippingService,
         protected TaxService $taxService,
         protected ZatcaDocumentService $zatcaDocuments,
+        protected NotificationService $notifications = new NotificationService,
     ) {}
 
     public function createFromCart(Cart $cart, ?User $user, array $shippingData, string $paymentMethod): Order
     {
-        return DB::transaction(function () use ($cart, $user, $shippingData, $paymentMethod) {
+        $order = DB::transaction(function () use ($cart, $user, $shippingData, $paymentMethod) {
             $cart->load(['items.product.categories', 'items.productVariant', 'coupon.discount']);
 
             if ($cart->items->isEmpty()) {
@@ -47,6 +48,7 @@ class OrderService
                 $itemSubtotal = round($unitPrice * $item->quantity, 2);
 
                 $orderItems[] = [
+                    'store_id' => $cart->store_id,
                     'product_id' => $item->product_id,
                     'product_variant_id' => $item->product_variant_id,
                     'name' => $item->productVariant?->name ?? $item->product->name,
@@ -74,6 +76,7 @@ class OrderService
                 $productTotals[$item->product_id] = ($productTotals[$item->product_id] ?? 0) + $lineTotal;
 
                 $items[] = [
+                    'cart_item_id' => $item->id,
                     'product_id' => $item->product_id,
                     'variant_id' => $item->product_variant_id,
                     'total' => $lineTotal,
@@ -88,6 +91,7 @@ class OrderService
                 $variantIds,
                 $items,
                 $this->discountService->redemptionIdentifier($user, $shippingData['guest_email'] ?? null),
+                $cart->store_id,
             );
 
             $discountTotal = 0;
@@ -120,7 +124,9 @@ class OrderService
             if (! empty($shippingData['shipping_rate_id'])) {
                 $rate = $this->shippingService->validateAndGetRate(
                     (int) $shippingData['shipping_rate_id'],
-                    $shippingData['shipping_city']
+                    $shippingData['shipping_city'],
+                    $shippingData['shipping_country'] ?? 'Bangladesh',
+                    $cart->store_id,
                 );
 
                 $shippingCost = $this->shippingService->calculateShippingCost($rate, $discountedSubtotal);
@@ -135,6 +141,7 @@ class OrderService
             $total = round($total + $taxAmount, 2);
 
             $order = Order::create([
+                'store_id' => $cart->store_id,
                 'user_id' => $user?->id,
                 'guest_email' => $user ? null : ($shippingData['guest_email'] ?? null),
                 'guest_phone' => $user ? null : ($shippingData['phone'] ?? null),
@@ -191,15 +198,23 @@ class OrderService
 
             return $order->fresh(['items', 'payments', 'user', 'coupon']);
         });
+
+        if ($order->status === 'confirmed') {
+            $this->notifications->notifyOrderConfirmed($order);
+        } else {
+            $this->notifications->notifyOrderPlaced($order);
+        }
+
+        return $order;
     }
 
     public function confirmPayment(Order $order, Payment $payment): void
     {
-        DB::transaction(function () use ($order) {
+        $confirmed = DB::transaction(function () use ($order) {
             $order = Order::lockForUpdate()->find($order->id);
 
             if (! $order || $order->status !== 'pending') {
-                return;
+                return false;
             }
 
             $order->update([
@@ -219,7 +234,13 @@ class OrderService
 
             $this->incrementAutomaticDiscountUsage($order);
             $this->queueZatcaDocument($order);
+
+            return true;
         });
+
+        if ($confirmed) {
+            $this->notifications->notifyOrderConfirmed($order->fresh() ?? $order);
+        }
     }
 
     public function confirmCodOrder(Order $order): void
@@ -270,11 +291,18 @@ class OrderService
         };
 
         $order->update($updateData);
+
+        match ($status) {
+            'shipped' => $this->notifications->notifyOrderShipped($order->fresh() ?? $order),
+            'delivered' => $this->notifications->notifyOrderDelivered($order->fresh() ?? $order),
+            default => null,
+        };
     }
 
     public function cancel(Order $order, ?string $reason = null): void
     {
         DB::transaction(function () use ($order, $reason) {
+            $order = Order::lockForUpdate()->findOrFail($order->id);
             $originalStatus = $order->status;
 
             $this->updateStatus($order, 'cancelled');
@@ -300,6 +328,8 @@ class OrderService
                 $this->decrementAutomaticDiscountUsage($order);
             }
         });
+
+        $this->notifications->notifyOrderCancelled($order->fresh() ?? $order, $reason);
     }
 
     public function expireOrder(Order $order): void
@@ -375,7 +405,9 @@ class OrderService
      */
     private function calculateOrderTax(Cart $cart, float $subtotal, float $discountTotal, float $shippingCost): float
     {
-        if (! $this->taxService->enabled() || $subtotal <= 0) {
+        $storeId = $cart->store_id;
+
+        if (! $this->taxService->enabled($storeId) || $subtotal <= 0) {
             return 0.0;
         }
 
@@ -390,7 +422,7 @@ class OrderService
             $taxableBase += $lineTotal - ($discountTotal * ($lineTotal / $subtotal));
         }
 
-        return $this->taxService->vatFor(round(max(0, $taxableBase), 2));
+        return $this->taxService->vatFor(round(max(0, $taxableBase), 2), $storeId);
     }
 
     /**
@@ -401,7 +433,7 @@ class OrderService
     private function queueZatcaDocument(Order $order): void
     {
         try {
-            if (! $this->zatcaDocuments->canSubmit()) {
+            if (! $this->zatcaDocuments->canSubmit($order->store_id)) {
                 return;
             }
 
@@ -497,7 +529,6 @@ class OrderService
             }
 
             $inventory->increment('quantity', $item->quantity);
-            $this->inventoryService->release($inventory, $item->quantity);
 
             InventoryMovement::create([
                 'inventory_id' => $inventory->id,

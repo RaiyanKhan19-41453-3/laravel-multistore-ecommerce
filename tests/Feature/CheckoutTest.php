@@ -7,7 +7,10 @@ use App\Models\CouponRedemption;
 use App\Models\Discount;
 use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
+use App\Services\CartService;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -50,6 +53,40 @@ it('can checkout with cod', function () {
         'status' => 'converted',
     ]);
 });
+
+it('preserves separate variant discounts from cart through checkout', function (string $mode) {
+    config(['discounts.combination_mode' => $mode]);
+    $user = createUser();
+    $product = Product::factory()->create(['type' => 'variable', 'is_active' => true]);
+    $firstVariant = ProductVariant::factory()->for($product)->create(['price' => 100]);
+    $secondVariant = ProductVariant::factory()->for($product)->create(['price' => 200]);
+    Inventory::factory()->forVariant($firstVariant)->withQuantity(10)->create();
+    Inventory::factory()->forVariant($secondVariant)->withQuantity(10)->create();
+    $discount = Discount::factory()->percentage()->create(['value' => 10, 'coupon_only' => false]);
+    $discount->products()->attach($product);
+    $service = app(CartService::class);
+    $cart = $service->getOrCreateForUser($user);
+    $service->addItem($cart, $product, $firstVariant, 1);
+    $service->addItem($cart, $product, $secondVariant, 1);
+    $summary = $service->getCartSummary($cart);
+
+    expect($summary['items'][0]['item_discounts'][0]['amount'])->toBe(10.0);
+    expect($summary['items'][1]['item_discounts'][0]['amount'])->toBe(20.0);
+    expect($summary['discount_total'])->toBe(30.0);
+
+    $response = $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user));
+
+    $response->assertOk();
+    $this->assertDatabaseHas('orders', [
+        'user_id' => $user->id,
+        'subtotal' => 300,
+        'discount_total' => 30,
+        'total' => 330,
+    ]);
+})->with(['single_winner', 'waterfall', 'best_per_line']);
 
 it('can checkout with bkash', function () {
     config([
@@ -777,4 +814,29 @@ it('does not increment global usage when coupon gives no discount', function () 
 
     expect($coupon->fresh()->usage_count)->toBe(0);
     expect($discount->fresh()->usage_count)->toBe(0);
+});
+
+it('returns a generic message when gateway initiation fails', function () {
+    config(['payment.enabled.stripe' => true]);
+    config([
+        'payment.gateways.stripe.secret_key' => 'sk_test_stripe',
+        'payment.gateways.stripe.base_url' => 'https://api.stripe.com',
+    ]);
+    Http::fake([
+        'api.stripe.com/*' => Http::response(['error' => ['message' => 'secret-internal-failure', 'leak' => 'should-not-appear']], 500),
+    ]);
+
+    $user = createUser();
+    $product = createProduct(500, 20);
+    createCartWithItem($user, $product, 2);
+
+    $response = $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'stripe',
+    ], authHeaders($user));
+
+    $response->assertStatus(502);
+    expect($response->json('message'))
+        ->not->toContain('secret-internal-failure')
+        ->not->toContain('should-not-appear');
 });

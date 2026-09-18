@@ -4,12 +4,12 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
 use App\Services\BarcodeService;
-use Spatie\Permission\Models\Role;
 
 function createLabelAdmin(): User
 {
+    ensureStaffPermissions();
+
     $user = User::factory()->create();
-    Role::findOrCreate('super-admin', 'web');
     $user->assignRole('super-admin');
 
     return $user;

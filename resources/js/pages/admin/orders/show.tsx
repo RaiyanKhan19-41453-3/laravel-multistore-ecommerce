@@ -1,4 +1,3 @@
-import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -8,8 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { formatPrice } from '@/lib/format';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ArrowLeft, Package, Pencil, Truck, XCircle } from 'lucide-react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft, FileText, Package, Pencil, Printer, Truck, XCircle } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 interface OrderItem {
@@ -114,30 +113,56 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
     const [showStatusDialog, setShowStatusDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-    const { data: statusData, setData: setStatusData, post: postStatus, processing: statusProcessing } = useForm({
+    const {
+        data: statusData,
+        setData: setStatusData,
+        post: postStatus,
+        processing: statusProcessing,
+    } = useForm({
         status: '',
     });
 
-    const { data: cancelData, setData: setCancelData, post: postCancel, processing: cancelProcessing } = useForm({
+    const {
+        data: cancelData,
+        setData: setCancelData,
+        post: postCancel,
+        processing: cancelProcessing,
+    } = useForm({
         cancellation_reason: '',
     });
 
     const [showShipmentDialog, setShowShipmentDialog] = useState(false);
-    const { data: shipmentData, setData: setShipmentData, post: postShipment, processing: shipmentProcessing, reset: resetShipment } = useForm({
+    const {
+        data: shipmentData,
+        setData: setShipmentData,
+        post: postShipment,
+        processing: shipmentProcessing,
+        reset: resetShipment,
+    } = useForm({
         courier_id: '',
         tracking_number: '',
         note: '',
     });
 
     const [editShipment, setEditShipment] = useState<Shipment | null>(null);
-    const { data: updateShipmentData, setData: setUpdateShipmentData, put: putShipment, processing: updateShipmentProcessing } = useForm({
+    const {
+        data: updateShipmentData,
+        setData: setUpdateShipmentData,
+        put: putShipment,
+        processing: updateShipmentProcessing,
+    } = useForm({
         status: '',
         tracking_number: '',
         note: '',
     });
 
     const [showSendToCourierDialog, setShowSendToCourierDialog] = useState(false);
-    const { data: sendCourierData, setData: setSendCourierData, post: postSendCourier, processing: sendCourierProcessing } = useForm({
+    const {
+        data: sendCourierData,
+        setData: setSendCourierData,
+        post: postSendCourier,
+        processing: sendCourierProcessing,
+    } = useForm({
         courier_id: '',
     });
 
@@ -198,13 +223,23 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                         </Link>
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight">{order.order_number}</h1>
-                            <p className="text-sm text-neutral-500">
-                                Placed on {new Date(order.created_at).toLocaleString()}
-                            </p>
+                            <p className="text-sm text-neutral-500">Placed on {new Date(order.created_at).toLocaleString()}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <Badge variant={status.variant}>{status.label}</Badge>
+                        <Link
+                            href={route('admin.invoices.show', order.id)}
+                            className="hover:bg-accent inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+                        >
+                            <FileText className="h-4 w-4" /> Invoice
+                        </Link>
+                        <Link
+                            href={route('admin.invoices.print', order.id)}
+                            className="hover:bg-accent inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+                        >
+                            <Printer className="h-4 w-4" /> Print
+                        </Link>
                         {nextStatuses.length > 0 && (
                             <Button
                                 size="sm"
@@ -227,7 +262,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-3">
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="space-y-6 lg:col-span-2">
                         <div className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
                             <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
                                 <h3 className="font-semibold">Order Items</h3>
@@ -251,7 +286,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                             <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
                                 <h3 className="font-semibold">Shipping</h3>
                             </div>
-                            <div className="px-4 py-3 space-y-1">
+                            <div className="space-y-1 px-4 py-3">
                                 <p className="font-medium">{order.shipping_name}</p>
                                 <p className="text-sm text-neutral-500">{order.shipping_phone}</p>
                                 <p className="text-sm text-neutral-500">
@@ -259,9 +294,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                                     {order.shipping_postal_code && ` ${order.shipping_postal_code}`}
                                 </p>
                                 <p className="text-sm text-neutral-500">{order.shipping_country}</p>
-                                {order.notes && (
-                                    <p className="mt-2 text-sm text-neutral-400 italic">Note: {order.notes}</p>
-                                )}
+                                {order.notes && <p className="mt-2 text-sm text-neutral-400 italic">Note: {order.notes}</p>}
                             </div>
                         </div>
 
@@ -273,7 +306,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                         )}
 
                         <div className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-                            <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800 flex items-center justify-between">
+                            <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
                                 <h3 className="font-semibold">Fulfillment</h3>
                                 {['confirmed', 'processing'].includes(order.status) && (
                                     <div className="flex items-center gap-2">
@@ -288,7 +321,9 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                             </div>
                             <div className="px-4 py-3">
                                 {order.shipments.length === 0 ? (
-                                    <p className="text-sm text-neutral-500">No shipments yet. Add tracking info when you send this order to a courier.</p>
+                                    <p className="text-sm text-neutral-500">
+                                        No shipments yet. Add tracking info when you send this order to a courier.
+                                    </p>
                                 ) : (
                                     <div className="space-y-3">
                                         {order.shipments.map((shipment) => (
@@ -315,9 +350,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                                                         </button>
                                                     </div>
                                                 </div>
-                                                {shipment.note && (
-                                                    <p className="mt-1 text-xs text-neutral-400 italic">{shipment.note}</p>
-                                                )}
+                                                {shipment.note && <p className="mt-1 text-xs text-neutral-400 italic">{shipment.note}</p>}
                                             </div>
                                         ))}
                                     </div>
@@ -365,15 +398,13 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                             <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
                                 <h3 className="font-semibold">Payment</h3>
                             </div>
-                            <div className="px-4 py-3 space-y-2">
+                            <div className="space-y-2 px-4 py-3">
                                 {order.payments.length > 0 ? (
                                     order.payments.map((payment) => (
                                         <div key={payment.id} className="text-sm">
                                             <div className="flex justify-between">
                                                 <span className="capitalize">{payment.method}</span>
-                                                <Badge variant={payment.status === 'paid' ? 'default' : 'secondary'}>
-                                                    {payment.status}
-                                                </Badge>
+                                                <Badge variant={payment.status === 'paid' ? 'default' : 'secondary'}>{payment.status}</Badge>
                                             </div>
                                             {payment.gateway_transaction_id && (
                                                 <p className="mt-1 text-xs text-neutral-500">TXN: {payment.gateway_transaction_id}</p>
@@ -393,12 +424,10 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                             <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
                                 <h3 className="font-semibold">Customer</h3>
                             </div>
-                            <div className="px-4 py-3 space-y-1 text-sm">
+                            <div className="space-y-1 px-4 py-3 text-sm">
                                 <p className="font-medium">{order.user?.name ?? order.guest_email ?? 'Guest'}</p>
                                 <p className="text-neutral-500">{order.user?.email ?? order.guest_email}</p>
-                                {!order.user && order.guest_phone && (
-                                    <p className="text-neutral-500">{order.guest_phone}</p>
-                                )}
+                                {!order.user && order.guest_phone && <p className="text-neutral-500">{order.guest_phone}</p>}
                             </div>
                         </div>
 
@@ -460,9 +489,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Update Order Status</DialogTitle>
-                        <DialogDescription>
-                            Move order {order.order_number} to the next status.
-                        </DialogDescription>
+                        <DialogDescription>Move order {order.order_number} to the next status.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleStatusUpdate} className="space-y-4">
                         <div className="grid gap-2">
@@ -494,9 +521,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Cancel Order</DialogTitle>
-                        <DialogDescription>
-                            This will cancel order {order.order_number} and release reserved inventory.
-                        </DialogDescription>
+                        <DialogDescription>This will cancel order {order.order_number} and release reserved inventory.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCancel} className="space-y-4">
                         <div className="grid gap-2">
@@ -524,9 +549,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Add Shipment Tracking</DialogTitle>
-                        <DialogDescription>
-                            Enter the courier and tracking number for order {order.order_number}.
-                        </DialogDescription>
+                        <DialogDescription>Enter the courier and tracking number for order {order.order_number}.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleAddShipment} className="space-y-4">
                         <div className="grid gap-2">
@@ -579,9 +602,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Update Shipment</DialogTitle>
-                        <DialogDescription>
-                            Update tracking for {editShipment?.courier}
-                        </DialogDescription>
+                        <DialogDescription>Update tracking for {editShipment?.courier}</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleUpdateShipment} className="space-y-4">
                         <div className="grid gap-2">
@@ -612,11 +633,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                         </div>
                         <div className="grid gap-2">
                             <Label>Note (optional)</Label>
-                            <Textarea
-                                value={updateShipmentData.note}
-                                onChange={(e) => setUpdateShipmentData('note', e.target.value)}
-                                rows={2}
-                            />
+                            <Textarea value={updateShipmentData.note} onChange={(e) => setUpdateShipmentData('note', e.target.value)} rows={2} />
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setEditShipment(null)}>
@@ -633,9 +650,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Send to Courier</DialogTitle>
-                        <DialogDescription>
-                            This will create a shipment via the courier API and auto-mark the order as shipped.
-                        </DialogDescription>
+                        <DialogDescription>This will create a shipment via the courier API and auto-mark the order as shipped.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSendToCourier} className="space-y-4">
                         <div className="grid gap-2">

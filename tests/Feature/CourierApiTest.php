@@ -12,12 +12,12 @@ use App\Services\Couriers\Gateways\RedXGateway;
 use App\Services\Couriers\Gateways\SAParibahanGateway;
 use App\Services\Couriers\Gateways\SteadfastGateway;
 use App\Services\Couriers\Gateways\SundarbanGateway;
-use Spatie\Permission\Models\Role;
 
 function createCourierAdmin(): User
 {
+    ensureStaffPermissions();
+
     $user = User::factory()->create();
-    Role::findOrCreate('super-admin', 'web');
     $user->assignRole('super-admin');
 
     return $user;

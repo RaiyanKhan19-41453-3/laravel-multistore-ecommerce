@@ -29,22 +29,60 @@ class ZatcaDocumentService
     ) {}
 
     /**
-     * Whether this deployment can submit documents right now:
-     * enabled, seller profile valid, and signing keys available.
+     * Whether the given store can submit documents right now: enabled,
+     * seller profile valid, and signing keys available. Null store keeps
+     * the legacy deployment-wide check.
      */
-    public function canSubmit(): bool
+    public function canSubmit(?int $storeId = null): bool
     {
-        if (! config('zatca.enabled', false) || ! $this->tax->hasValidSellerProfile()) {
+        if (! config('zatca.enabled', false) || ! $this->tax->hasValidSellerProfile($storeId)) {
             return false;
         }
 
         try {
-            $this->signingKeys();
+            $this->signingKeys($this->deviceForStore($storeId));
         } catch (\InvalidArgumentException) {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * This store's EGS device: onboarded unit first, then any unit of the
+     * store, then the deployment-wide device. Separate devices keep ICV
+     * sequences and PIH chains from crossing stores.
+     */
+    public function deviceForStore(?int $storeId): ?ZatcaDevice
+    {
+        try {
+            if ($storeId !== null) {
+                // Onboarded unit first (NULL datetimes sort unpredictably
+                // across drivers), then any unit of the store.
+                $onboarded = ZatcaDevice::where('store_id', $storeId)
+                    ->whereNotNull('onboarded_at')
+                    ->orderBy('serial')
+                    ->first();
+
+                if ($onboarded) {
+                    return $onboarded;
+                }
+
+                $any = ZatcaDevice::where('store_id', $storeId)->orderBy('serial')->first();
+
+                if ($any) {
+                    return $any;
+                }
+            }
+        } catch (\Throwable) {
+            // Fall through to the global device below.
+        }
+
+        try {
+            return ZatcaDevice::find(config('zatca.device.serial', 'default'));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -126,11 +164,11 @@ class ZatcaDocumentService
             throw new \InvalidArgumentException("Unknown ZATCA document type [{$type}].");
         }
 
-        if (! $this->tax->hasValidSellerProfile()) {
+        if (! $this->tax->hasValidSellerProfile($order->store_id)) {
             throw new \InvalidArgumentException('Seller tax profile is incomplete: Arabic name and 15-digit VAT number are required.');
         }
 
-        $seller = config('zatca.seller');
+        $seller = $this->tax->sellerProfile($order->store_id);
 
         $order->loadMissing(['items', 'items.product']);
 
@@ -145,13 +183,15 @@ class ZatcaDocumentService
                 'quantity' => $item->quantity,
                 'unit_price' => round((float) $item->unit_price, 2),
                 'line_total' => $lineTotal,
-                'vat_rate' => $this->tax->rate(),
+                'vat_rate' => $this->tax->rate($order->store_id),
                 'vat_amount' => $vatAmount,
             ];
         }
 
         $uuid = (string) Str::uuid();
-        $deviceSerial = config('zatca.device.serial', 'default') ?: 'default';
+        $deviceSerial = $this->deviceForStore($order->store_id)?->serial
+            ?? config('zatca.device.serial', 'default')
+            ?: 'default';
         $icv = $this->nextIcv($deviceSerial);
         $previousHash = $this->previousHash($deviceSerial);
         $issuedAt = $order->created_at ?? now();
@@ -162,6 +202,7 @@ class ZatcaDocumentService
 
         return ZatcaDocument::create([
             'order_id' => $order->id,
+            'store_id' => $order->store_id,
             'device_serial' => $deviceSerial,
             'type' => $type,
             'uuid' => $uuid,
@@ -184,7 +225,7 @@ class ZatcaDocumentService
         $signature = $this->signer->sign(base64_decode($hash), $privateKeyPem);
         $publicKey = $this->signer->publicKeyDer($certificatePem);
 
-        $seller = config('zatca.seller');
+        $seller = $this->tax->sellerProfile($document->store_id);
         $order = $document->order;
 
         $qrPayload = $this->qr->base64([
@@ -228,7 +269,7 @@ class ZatcaDocumentService
 
     private function lineVat(Order $order, object $item, float $lineTotal): float
     {
-        if (! $this->tax->enabled() || $order->subtotal <= 0) {
+        if (! $this->tax->enabled($order->store_id) || $order->subtotal <= 0) {
             return 0.0;
         }
 

@@ -3,12 +3,14 @@
 namespace App\Services\Couriers;
 
 use App\Models\Courier;
+use App\Services\Couriers\Gateways\AramexGateway;
 use App\Services\Couriers\Gateways\CourierGateway;
 use App\Services\Couriers\Gateways\ECourierGateway;
 use App\Services\Couriers\Gateways\PaperflyGateway;
 use App\Services\Couriers\Gateways\PathaoGateway;
 use App\Services\Couriers\Gateways\RedXGateway;
 use App\Services\Couriers\Gateways\SAParibahanGateway;
+use App\Services\Couriers\Gateways\SmsaGateway;
 use App\Services\Couriers\Gateways\SteadfastGateway;
 use App\Services\Couriers\Gateways\SundarbanGateway;
 
@@ -22,6 +24,8 @@ class CourierGatewayFactory
         'ecourier' => ECourierGateway::class,
         'sa_paribahan' => SAParibahanGateway::class,
         'sundarban' => SundarbanGateway::class,
+        'smsa' => SmsaGateway::class,
+        'aramex' => AramexGateway::class,
     ];
 
     public static function make(Courier $courier): ?CourierGateway

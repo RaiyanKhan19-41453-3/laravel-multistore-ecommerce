@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 class InventoryService
 {
+    public function __construct(
+        private readonly NotificationService $notifications = new NotificationService,
+    ) {}
+
     public function getForProduct(Product $product): Collection
     {
         if ($product->isSimple()) {
@@ -62,7 +66,9 @@ class InventoryService
 
     public function adjust(Inventory $inventory, string $type, int $quantity, ?string $note = null): InventoryMovement
     {
-        return DB::transaction(function () use ($inventory, $type, $quantity, $note) {
+        $wasAvailable = $inventory->getAvailableQuantity() > 0;
+
+        $movement = DB::transaction(function () use ($inventory, $type, $quantity, $note) {
             $inventory = Inventory::lockForUpdate()->find($inventory->id);
 
             $newQuantity = $inventory->quantity + $quantity;
@@ -83,6 +89,10 @@ class InventoryService
                 'user_id' => Auth::id(),
             ]);
         });
+
+        $this->notifyIfRestocked($inventory->fresh() ?? $inventory, $wasAvailable);
+
+        return $movement;
     }
 
     public function reserve(Inventory $inventory, int $quantity): void
@@ -121,6 +131,8 @@ class InventoryService
             throw new \InvalidArgumentException('Quantity cannot be negative.');
         }
 
+        $wasAvailable = $inventory->getAvailableQuantity() > 0;
+
         DB::transaction(function () use ($inventory, $quantity, $note) {
             $inventory = Inventory::lockForUpdate()->find($inventory->id);
 
@@ -138,5 +150,25 @@ class InventoryService
                 ]);
             }
         });
+
+        $this->notifyIfRestocked($inventory->fresh() ?? $inventory, $wasAvailable);
+    }
+
+    /**
+     * Mail wishlisters when an explicit stock change brings a product back.
+     * Reservation releases are excluded: they only free held units, and
+     * firing on every cancellation would spam the same customers.
+     */
+    private function notifyIfRestocked(Inventory $inventory, bool $wasAvailable): void
+    {
+        if ($wasAvailable || $inventory->getAvailableQuantity() <= 0) {
+            return;
+        }
+
+        $product = $inventory->product;
+
+        if ($product && $product->is_active) {
+            $this->notifications->notifyBackInStock($product);
+        }
     }
 }

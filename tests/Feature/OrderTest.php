@@ -118,7 +118,7 @@ it('restores inventory when cancelling confirmed order', function () {
     ]);
 
     $inventory = Inventory::where('product_id', $product->id)->first();
-    $inventory->update(['quantity' => 17]);
+    $inventory->update(['quantity' => 17, 'reserved_quantity' => 5]);
     expect($inventory->fresh()->quantity)->toBe(17);
 
     $response = $this->actingAs($user)
@@ -127,6 +127,42 @@ it('restores inventory when cancelling confirmed order', function () {
     $response->assertOk();
 
     expect($inventory->fresh()->quantity)->toBe(20);
+    expect($inventory->fresh()->reserved_quantity)->toBe(5);
+});
+
+it('rejects a repeated cancellation from a stale order without restoring stock twice', function () {
+    $product = createProduct(500, 17);
+    $order = Order::factory()->confirmed()->create();
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id, 'quantity' => 3]);
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    $inventory->update(['reserved_quantity' => 5]);
+    $staleOrder = $order->fresh();
+    $service = app(OrderService::class);
+    $service->cancel($order);
+
+    expect(fn () => $service->cancel($staleOrder))->toThrow(InvalidArgumentException::class);
+
+    expect($inventory->fresh()->quantity)->toBe(20);
+    expect($inventory->fresh()->reserved_quantity)->toBe(5);
+    expect($inventory->movements()->where('type', 'return')->count())->toBe(1);
+});
+
+it('cancels using the current order state after payment confirmation', function () {
+    $product = createProduct(500, 20);
+    $order = Order::factory()->pending()->create();
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id, 'quantity' => 3]);
+    $inventory = Inventory::where('product_id', $product->id)->first();
+    $inventory->update(['reserved_quantity' => 8]);
+    $payment = Payment::factory()->for($order)->paid()->create();
+    $staleOrder = $order->fresh();
+    $service = app(OrderService::class);
+    $service->confirmPayment($order, $payment);
+
+    $service->cancel($staleOrder);
+
+    expect($order->fresh()->status)->toBe('cancelled');
+    expect($inventory->fresh()->quantity)->toBe(20);
+    expect($inventory->fresh()->reserved_quantity)->toBe(5);
 });
 
 it('only releases reservation when cancelling pending order', function () {
@@ -201,4 +237,15 @@ it('cancels order with soft-deleted coupon without crashing', function () {
 
     $response->assertOk();
     expect($order->fresh()->status)->toBe('cancelled');
+});
+
+it('hides gateway internals on order detail', function () {
+    $user = User::factory()->create();
+    $order = Order::factory()->for($user)->create();
+    Payment::factory()->for($order)->paid()->create(['gateway_response' => ['secret' => 'abc']]);
+
+    $response = $this->actingAs($user)->getJson("/api/orders/{$order->id}");
+
+    $response->assertOk();
+    expect($response->json('data.payments.0.gateway_response'))->toBeNull();
 });

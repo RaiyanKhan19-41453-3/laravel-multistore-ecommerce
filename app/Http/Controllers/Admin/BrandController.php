@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
+use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,9 +28,11 @@ class BrandController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:brands,slug',
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('brands', 'slug')->where('store_id', $storeId)],
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
@@ -43,9 +47,11 @@ class BrandController extends Controller
 
     public function update(Request $request, Brand $brand): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:brands,slug,'.$brand->id,
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('brands', 'slug')->ignore($brand->id)->where('store_id', $storeId)],
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Services\CartService;
+use App\Support\AdminStoreContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,10 @@ class StoreActivityController extends Controller
 
     public function index(Request $request): Response
     {
-        $activeCarts = Cart::with(['items.product', 'items.productVariant', 'user'])
+        $storeId = app(AdminStoreContext::class)->selectedId();
+        $scope = fn ($q) => $storeId ? $q->where('carts.store_id', $storeId) : $q;
+
+        $activeCarts = $scope(Cart::with(['items.product', 'items.productVariant', 'user']))
             ->where('status', 'active')
             ->latest()
             ->limit(50)
@@ -45,25 +49,27 @@ class StoreActivityController extends Controller
                 'created_at' => $cart->created_at->toISOString(),
             ]);
 
-        $totalCarts = Cart::where('status', 'active')->count();
-        $guestCarts = Cart::where('status', 'active')->whereNull('user_id')->count();
-        $userCarts = Cart::where('status', 'active')->whereNotNull('user_id')->count();
+        $totalCarts = $scope(Cart::where('status', 'active'))->count();
+        $guestCarts = $scope(Cart::where('status', 'active'))->whereNull('user_id')->count();
+        $userCarts = $scope(Cart::where('status', 'active'))->whereNotNull('user_id')->count();
         $totalItems = DB::table('cart_items')
             ->join('carts', 'carts.id', '=', 'cart_items.cart_id')
             ->where('carts.status', 'active')
+            ->when($storeId, fn ($q) => $q->where('carts.store_id', $storeId))
             ->sum('cart_items.quantity');
 
         $popularProducts = DB::table('cart_items')
             ->join('carts', 'carts.id', '=', 'cart_items.cart_id')
             ->join('products', 'products.id', '=', 'cart_items.product_id')
             ->where('carts.status', 'active')
+            ->when($storeId, fn ($q) => $q->where('carts.store_id', $storeId))
             ->select('products.id', 'products.name', 'products.slug', 'products.price', DB::raw('SUM(cart_items.quantity) as total_quantity'), DB::raw('COUNT(DISTINCT carts.id) as cart_count'))
             ->groupBy('products.id', 'products.name', 'products.slug', 'products.price')
             ->orderByDesc('total_quantity')
             ->limit(10)
             ->get();
 
-        $recentGuests = Cart::where('status', 'active')
+        $recentGuests = $scope(Cart::where('status', 'active'))
             ->whereNull('user_id')
             ->whereNotNull('guest_token')
             ->latest()
@@ -91,7 +97,14 @@ class StoreActivityController extends Controller
 
     public function clearAllCarts(): RedirectResponse
     {
-        $carts = Cart::where('status', 'active')->get();
+        $storeId = app(AdminStoreContext::class)->selectedId();
+        $query = Cart::where('status', 'active');
+
+        if ($storeId) {
+            $query->where('store_id', $storeId);
+        }
+
+        $carts = $query->get();
 
         foreach ($carts as $cart) {
             $this->cartService->clearCart($cart);

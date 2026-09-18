@@ -7,9 +7,12 @@ use App\Models\Attribute;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\InventoryService;
+use App\Support\AdminStoreContext;
+use App\Support\CurrentStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -72,9 +75,12 @@ class ProductVariantController extends Controller
             ], 422);
         }
 
+        $storeId = app(CurrentStore::class)->scopeId();
+        $targetStoreId = app(AdminStoreContext::class)->anchorStoreId($product);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|max:255|unique:product_variants,sku',
+            'sku' => ['required', 'string', 'max:255', Rule::unique('product_variants', 'sku')->where('store_id', $storeId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',
@@ -82,7 +88,7 @@ class ProductVariantController extends Controller
             'quantity' => 'nullable|integer|min:0',
             'is_active' => 'boolean',
             'attribute_value_ids' => 'required|array',
-            'attribute_value_ids.*' => 'exists:attribute_values,id',
+            'attribute_value_ids.*' => [app(AdminStoreContext::class)->existsInStore('attribute_values', $targetStoreId)],
         ]);
 
         $valueIds = $validated['attribute_value_ids'];
@@ -91,6 +97,14 @@ class ProductVariantController extends Controller
         $validated['product_id'] = $product->id;
 
         $variant = ProductVariant::create($validated);
+
+        // Variants always live on their product's store, even when the
+        // request resolved to another store.
+        if ($product->store_id && $variant->store_id !== $product->store_id) {
+            $variant->store_id = $product->store_id;
+            $variant->save();
+        }
+
         $variant->values()->sync($valueIds);
 
         $inventory = $this->inventoryService->getOrCreateForVariant($variant);
@@ -123,9 +137,12 @@ class ProductVariantController extends Controller
             ], 422);
         }
 
+        $storeId = app(CurrentStore::class)->scopeId();
+        $targetStoreId = app(AdminStoreContext::class)->anchorStoreId($product);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|max:255|unique:product_variants,sku,'.$variant->id,
+            'sku' => ['required', 'string', 'max:255', Rule::unique('product_variants', 'sku')->ignore($variant->id)->where('store_id', $storeId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',
@@ -133,7 +150,7 @@ class ProductVariantController extends Controller
             'quantity' => 'nullable|integer|min:0',
             'is_active' => 'boolean',
             'attribute_value_ids' => 'required|array',
-            'attribute_value_ids.*' => 'exists:attribute_values,id',
+            'attribute_value_ids.*' => [app(AdminStoreContext::class)->existsInStore('attribute_values', $targetStoreId)],
         ]);
 
         $valueIds = $validated['attribute_value_ids'];
@@ -179,10 +196,14 @@ class ProductVariantController extends Controller
 
         $request->validate([
             'attribute_ids' => 'required|array',
-            'attribute_ids.*' => 'exists:attributes,id',
+            'attribute_ids.*' => [app(AdminStoreContext::class)->existsInStore('attributes', $product->store_id ?? app(CurrentStore::class)->scopeId())],
         ]);
 
-        $attributes = Attribute::with('values')->whereIn('id', $request->attribute_ids)->get();
+        $attributes = Attribute::with(['values' => function ($q) use ($product) {
+            if ($product->store_id !== null) {
+                $q->where('attribute_values.store_id', $product->store_id);
+            }
+        }])->whereIn('id', $request->attribute_ids)->get();
 
         if ($attributes->isEmpty()) {
             return response()->json([
@@ -225,6 +246,14 @@ class ProductVariantController extends Controller
                     'quantity' => 0,
                     'is_active' => true,
                 ]);
+
+                // Generated variants inherit the product's store even when
+                // the request resolved elsewhere (platform-wide view).
+                if ($product->store_id !== null && $variant->store_id !== $product->store_id) {
+                    $variant->store_id = $product->store_id;
+                    $variant->save();
+                }
+
                 $variant->values()->sync($valueIds);
                 $this->inventoryService->getOrCreateForVariant($variant);
                 $created++;

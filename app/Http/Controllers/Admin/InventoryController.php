@@ -23,8 +23,10 @@ class InventoryController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->whereHas('product', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))
-                ->orWhereHas('productVariant', fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"));
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('product', fn ($pq) => $pq->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))
+                    ->orWhereHas('productVariant', fn ($vq) => $vq->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"));
+            });
         }
 
         if ($request->filled('filter')) {

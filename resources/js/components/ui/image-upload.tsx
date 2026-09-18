@@ -45,7 +45,6 @@ interface ImageUploadProps {
     productId: number;
     images: ImageData[];
     variantId?: number;
-    label?: string;
 }
 
 function SortableExistingImage({
@@ -237,7 +236,7 @@ function SortablePendingImage({
     );
 }
 
-export default function ImageUpload({ productId, images, variantId, label = 'Images' }: ImageUploadProps) {
+export default function ImageUpload({ productId, images, variantId }: ImageUploadProps) {
     const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
     const [orderedImages, setOrderedImages] = useState<ImageData[]>(images);
     const [deletedIds, setDeletedIds] = useState<number[]>([]);

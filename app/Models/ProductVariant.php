@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class ProductVariant extends Model
 {
     use HasFactory, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new BelongsToStore);
+    }
 
     protected $fillable = [
         'product_id',

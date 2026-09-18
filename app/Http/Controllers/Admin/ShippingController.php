@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ShippingMethod;
 use App\Models\ShippingRate;
 use App\Models\ShippingZone;
+use App\Support\AdminStoreContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,9 +16,12 @@ class ShippingController extends Controller
 {
     public function index(): Response
     {
-        $methods = ShippingMethod::orderBy('sort_order')->get();
-        $zones = ShippingZone::orderBy('sort_order')->get();
-        $rates = ShippingRate::with(['shippingMethod', 'shippingZone'])->get();
+        $storeId = app(AdminStoreContext::class)->selectedId();
+        $scope = fn ($q) => $storeId ? $q->where('store_id', $storeId) : $q;
+
+        $methods = $scope(ShippingMethod::orderBy('sort_order'))->get();
+        $zones = $scope(ShippingZone::orderBy('sort_order'))->get();
+        $rates = $scope(ShippingRate::with(['shippingMethod', 'shippingZone']))->get();
 
         return Inertia::render('admin/shipping/index', [
             'methods' => $methods,
@@ -65,6 +69,8 @@ class ShippingController extends Controller
 
     public function storeZone(Request $request): RedirectResponse
     {
+        $storeId = app(AdminStoreContext::class)->selectedId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'country' => 'required|string|max:100',
@@ -80,6 +86,7 @@ class ShippingController extends Controller
         if ($isFallback) {
             $existing = ShippingZone::where('is_fallback', true)
                 ->where('country', $validated['country'])
+                ->when($storeId, fn ($q) => $q->where('store_id', $storeId))
                 ->first();
             if ($existing) {
                 return back()->withErrors(['is_fallback' => 'A fallback zone already exists for this country. Edit the existing one instead.']);
@@ -90,7 +97,8 @@ class ShippingController extends Controller
         ShippingZone::validateNoDuplicateCities(
             null,
             $validated['cities'] ?? null,
-            $isFallback
+            $isFallback,
+            $storeId
         );
 
         ShippingZone::create($validated);
@@ -100,6 +108,8 @@ class ShippingController extends Controller
 
     public function updateZone(Request $request, ShippingZone $zone): RedirectResponse
     {
+        $storeId = app(AdminStoreContext::class)->selectedId() ?? $zone->store_id;
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'country' => 'required|string|max:100',
@@ -116,6 +126,7 @@ class ShippingController extends Controller
             $existing = ShippingZone::where('is_fallback', true)
                 ->where('country', $validated['country'])
                 ->where('id', '!=', $zone->id)
+                ->when($storeId, fn ($q) => $q->where('store_id', $storeId))
                 ->first();
             if ($existing) {
                 return back()->withErrors(['is_fallback' => 'A fallback zone already exists for this country. Edit the existing one instead.']);
@@ -126,7 +137,8 @@ class ShippingController extends Controller
         ShippingZone::validateNoDuplicateCities(
             $zone->id,
             $validated['cities'] ?? null,
-            $isFallback
+            $isFallback,
+            $storeId
         );
 
         $zone->update($validated);
@@ -143,12 +155,22 @@ class ShippingController extends Controller
 
     public function storeRate(Request $request): RedirectResponse
     {
+        $storeId = app(AdminStoreContext::class)->selectedId();
+        $exists = fn (string $table) => app(AdminStoreContext::class)->existsInStore($table, $storeId);
+
         $validated = $request->validate([
-            'shipping_method_id' => 'required|exists:shipping_methods,id',
-            'shipping_zone_id' => 'required|exists:shipping_zones,id',
+            'shipping_method_id' => ['required', $exists('shipping_methods')],
+            'shipping_zone_id' => ['required', $exists('shipping_zones')],
             'price' => 'required|numeric|min:0',
             'free_shipping_min' => 'nullable|numeric|min:0',
         ]);
+
+        $method = ShippingMethod::find($validated['shipping_method_id']);
+        $zone = ShippingZone::find($validated['shipping_zone_id']);
+
+        if ($method && $zone && $method->store_id && $zone->store_id && $method->store_id !== $zone->store_id) {
+            return back()->withErrors(['shipping_zone_id' => 'Method and zone must belong to the same store.']);
+        }
 
         ShippingRate::updateOrCreate(
             [

@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Discount;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Services\DiscountService;
 
 it('calculates percentage discount correctly', function () {
@@ -335,6 +337,36 @@ it('bestDiscountForOrder filters by productIds', function () {
     $result = $service->bestDiscountForOrder(1000, null, [$product2->id]);
 
     $this->assertNull($result);
+});
+
+it('distinguishes unmatched targeted lines from missing discount calculation details', function (string $relation, string $model) {
+    $product = Product::factory()->create(['price' => 100]);
+    $target = in_array($relation, ['categories', 'brands'], true)
+        ? $model::create(['name' => 'Unmatched target', 'slug' => 'unmatched-target', 'is_active' => true])
+        : $model::factory()->create();
+    $discount = Discount::factory()->percentage()->create(['value' => 20, 'coupon_only' => true]);
+    $discount->{$relation}()->attach($target);
+    $service = new DiscountService;
+    $items = [['cart_item_id' => 1, 'product_id' => $product->id, 'variant_id' => null, 'total' => 100]];
+
+    expect($service->getEligibleSubtotal($discount, [$product->id], [$product->id => 100], 100, [], $items))->toBe(0.0);
+    expect($service->getEligibleSubtotal($discount, [], [], 100))->toBe(100.0);
+})->with([
+    'product' => ['products', Product::class],
+    'category' => ['categories', Category::class],
+    'brand' => ['brands', Brand::class],
+    'variant' => ['productVariants', ProductVariant::class],
+]);
+
+it('preserves matched and sitewide discount eligibility', function () {
+    $product = Product::factory()->create(['price' => 100]);
+    $discount = Discount::factory()->percentage()->create(['value' => 20]);
+    $service = new DiscountService;
+    $items = [['cart_item_id' => 1, 'product_id' => $product->id, 'total' => 100]];
+
+    expect($service->getEligibleSubtotal($discount, [$product->id], [$product->id => 100], 80, [], $items))->toBe(100.0);
+    $discount->products()->attach($product);
+    expect($service->getEligibleSubtotal($discount->fresh(), [$product->id], [$product->id => 100], 80, [], $items))->toBe(100.0);
 });
 
 it('increments usage only for the given discount', function () {

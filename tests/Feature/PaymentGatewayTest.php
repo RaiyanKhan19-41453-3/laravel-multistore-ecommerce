@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Order;
 use App\Models\Payment;
 use App\Services\PaymentGateways\BkashGateway;
 use App\Services\PaymentGateways\PaymentGatewayFactory;
@@ -125,4 +126,30 @@ it('only returns enabled payment methods', function () {
     $methods = $response->json('data.methods');
     expect($methods)->toHaveCount(1);
     expect($methods[0]['value'])->toBe('sslcommerz');
+});
+
+it('excludes enabled flags for gateways with no implementation', function () {
+    config(['payment.enabled.cod' => true]);
+    config(['payment.enabled.nagad' => true]);
+    config(['payment.enabled.rocket' => true]);
+
+    $enabled = PaymentGatewayFactory::getEnabled();
+
+    expect($enabled)->toContain('cod')->not->toContain('nagad')->not->toContain('rocket');
+});
+
+it('rejects unimplemented gateway methods at checkout validation', function () {
+    config(['payment.enabled.nagad' => true]);
+
+    $user = createUser();
+    $product = createProduct(500, 20);
+    createCartWithItem($user, $product, 1);
+
+    $response = $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'nagad',
+    ], authHeaders($user));
+
+    $response->assertStatus(422)->assertJsonValidationErrors(['payment_method']);
+    expect(Order::count())->toBe(0);
 });

@@ -2,6 +2,7 @@
 
 use App\Console\Commands\CleanupStaleCarts;
 use App\Console\Commands\ExpirePendingOrders;
+use App\Console\Commands\PruneAuditLogs;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -16,3 +17,6 @@ Schedule::command(ExpirePendingOrders::class)
 
 Schedule::command(CleanupStaleCarts::class)
     ->daily();
+
+Schedule::command(PruneAuditLogs::class)
+    ->monthly();

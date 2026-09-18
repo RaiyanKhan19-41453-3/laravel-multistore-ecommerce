@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnsureStoreSubscription;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveCart;
+use App\Http\Middleware\ResolveStore;
 use App\Http\Middleware\ResolveStoreToken;
+use App\Http\Middleware\SetStoreLocale;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -26,11 +29,16 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->web(append: [
+            ResolveStore::class,
+            EnsureStoreSubscription::class,
+            SetStoreLocale::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
         $middleware->api(append: [
+            ResolveStore::class,
+            EnsureStoreSubscription::class,
             ResolveStoreToken::class,
         ]);
 

@@ -5,12 +5,12 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Shipment;
 use App\Models\User;
-use Spatie\Permission\Models\Role;
 
 function createShipmentAdmin(): User
 {
+    ensureStaffPermissions();
+
     $user = User::factory()->create();
-    Role::findOrCreate('super-admin', 'web');
     $user->assignRole('super-admin');
 
     return $user;

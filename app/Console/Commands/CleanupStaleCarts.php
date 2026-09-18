@@ -14,22 +14,22 @@ class CleanupStaleCarts extends Command
 
     public function handle(CartService $cartService): int
     {
-        $staleCarts = Cart::where('status', 'active')
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<', now())
-            ->get();
-
         $count = 0;
 
-        foreach ($staleCarts as $cart) {
-            try {
-                $cartService->clearCart($cart);
-                $cart->update(['status' => 'expired']);
-                $count++;
-            } catch (\Exception $e) {
-                $this->error("Failed to expire cart {$cart->id}: {$e->getMessage()}");
-            }
-        }
+        Cart::where('status', 'active')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<', now())
+            ->chunkById(200, function ($carts) use ($cartService, &$count) {
+                foreach ($carts as $cart) {
+                    try {
+                        $cartService->clearCart($cart);
+                        $cart->update(['status' => 'expired']);
+                        $count++;
+                    } catch (\Exception $e) {
+                        $this->error("Failed to expire cart {$cart->id}: {$e->getMessage()}");
+                    }
+                }
+            });
 
         $this->info("Expired {$count} stale carts.");
 

@@ -4,11 +4,20 @@ import { Link, usePage } from '@inertiajs/react';
 
 export function NavMain({ items = [] }: { items: NavItem[] }) {
     const page = usePage();
+    const permissions = (page.props.auth as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const visible = items.filter((item) => {
+        if (!item.permission) {
+            return true;
+        }
+
+        return item.permission.split('|').some((p) => permissions.includes(p.trim()));
+    });
+
     return (
         <SidebarGroup className="px-2 py-0">
             <SidebarGroupLabel>Platform</SidebarGroupLabel>
             <SidebarMenu>
-                {items.map((item) => (
+                {visible.map((item) => (
                     <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild isActive={item.url === page.url}>
                             <Link href={item.url} prefetch>

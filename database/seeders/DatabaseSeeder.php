@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -13,6 +14,18 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        Store::firstOrCreate(
+            ['slug' => 'default'],
+            [
+                'name' => config('store.name', config('app.name', 'Default Store')),
+                'country' => config('store.country', 'BD'),
+                'currency' => config('store.currency', 'BDT'),
+                'locale' => config('store.locale', 'en'),
+                'timezone' => config('store.timezone', 'Asia/Dhaka'),
+                'is_active' => true,
+            ]
+        );
+
         User::firstOrCreate(
             ['email' => 'test@example.com'],
             [
@@ -30,6 +43,7 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->call(PermissionSeeder::class);
+        $this->call(SettingsSeeder::class);
         $this->call(BrandSeeder::class);
         $this->call(CategorySeeder::class);
         $this->call(AttributeSeeder::class);

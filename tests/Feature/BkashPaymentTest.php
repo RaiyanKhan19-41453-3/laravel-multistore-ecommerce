@@ -198,7 +198,7 @@ it('throws when token grant fails', function () {
     $method->setAccessible(true);
 
     $method->invoke($gateway);
-})->throws(RuntimeException::class, 'bKash token grant failed');
+})->throws(RuntimeException::class, 'bKash payment could not be started');
 
 // --- initiatePayment ---
 
@@ -245,7 +245,7 @@ it('throws when bKash create payment fails', function () {
 
     $gateway = new BkashGateway;
     $gateway->initiatePayment($order, $payment);
-})->throws(RuntimeException::class, 'Insufficient balance');
+})->throws(RuntimeException::class, 'bKash payment could not be started');
 
 // --- verifyPayment (Execute) ---
 
@@ -584,7 +584,7 @@ it('handles bKash callback with success and queries payment', function () {
     $response = $this->getJson('/api/payments/callback/bkash?paymentID=BKASH_CB_123&status=success&order='.$order->order_number);
 
     $response->assertRedirect();
-    expect($response->headers->get('Location'))->toContain('/account/orders/'.$order->order_number);
+    expect($response->headers->get('Location'))->toContain('/order-confirmation/'.$order->order_number);
     expect($response->headers->get('Location'))->toContain('payment=bkash_success');
 
     $payment->refresh();
@@ -698,4 +698,20 @@ it('returns success if payment already paid in callback (idempotent)', function 
 
     $response->assertRedirect();
     expect($response->headers->get('Location'))->toContain('payment=bkash_success');
+});
+
+it('lands on a working order confirmation page after bkash callback', function () {
+    $order = createBkashOrder('pending');
+    $payment = createBkashPayment($order);
+    $payment->update(['gateway_transaction_id' => 'BKASH_CB_LAND']);
+
+    fakeBkashTokenGrant();
+    fakeBkashQuery('Completed');
+
+    $response = $this->getJson('/api/payments/callback/bkash?paymentID=BKASH_CB_LAND&status=success&order='.$order->order_number);
+    $response->assertRedirect();
+
+    $this->get('/order-confirmation/'.$order->order_number.'?payment=bkash_success')
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p->component('account/order-confirmation'));
 });

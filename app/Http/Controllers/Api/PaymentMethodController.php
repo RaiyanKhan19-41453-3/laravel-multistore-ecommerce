@@ -22,6 +22,9 @@ class PaymentMethodController extends Controller
                     'bkash' => 'bKash',
                     'nagad' => 'Nagad',
                     'rocket' => 'Rocket',
+                    'moyasar' => 'Mada / Card (Moyasar)',
+                    'tabby' => 'Tabby — Pay in 4',
+                    'stripe' => 'Card (Stripe)',
                     default => $name,
                 },
             ];

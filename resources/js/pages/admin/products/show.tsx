@@ -26,17 +26,38 @@ interface ProductVariant {
     values: { id: number; value: string; attribute: { id: number; name: string } }[];
 }
 
-interface Inventory {
-    id: number;
-    quantity: number;
-    reserved_quantity: number;
-}
-
 interface Discount {
     id: number;
     name: string;
     type: string;
     value: number;
+}
+
+interface ProductShowData {
+    id: number;
+    name: string;
+    sku: string;
+    type: string;
+    price: string;
+    compare_at_price: string | null;
+    cost_price: string | null;
+    barcode: string | null;
+    description: string | null;
+    short_description: string | null;
+    is_active: boolean;
+    is_featured: boolean;
+    brand: { id: number; name: string } | null;
+    inventory: { quantity: number; reserved_quantity: number } | null;
+    variants: ProductVariant[];
+    categories: Category[];
+    discounts: Discount[];
+    images: ProductImage[];
+}
+
+interface Category {
+    id: number;
+    name: string;
+    parent: { id: number; name: string } | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -45,7 +66,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Details', href: '#' },
 ];
 
-export default function ProductShow({ product }: { product: any }) {
+export default function ProductShow({ product }: { product: ProductShowData }) {
     const available = (product.inventory?.quantity ?? 0) - (product.inventory?.reserved_quantity ?? 0);
 
     return (
@@ -164,7 +185,7 @@ export default function ProductShow({ product }: { product: any }) {
                                                 <td className="px-4 py-3 font-mono text-neutral-500">{v.sku}</td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex flex-wrap gap-1">
-                                                        {v.values?.map((av: any) => (
+                                                        {v.values?.map((av) => (
                                                             <Badge key={av.id} variant="secondary">{av.attribute.name}: {av.value}</Badge>
                                                         ))}
                                                     </div>
@@ -208,7 +229,7 @@ export default function ProductShow({ product }: { product: any }) {
                             <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
                                 <h3 className="mb-4 text-lg font-semibold">Categories</h3>
                                 <div className="flex flex-wrap gap-1">
-                                    {product.categories.map((c: any) => (
+                                    {product.categories.map((c) => (
                                         <Badge key={c.id} variant="secondary">{c.parent ? `${c.parent.name} → ` : ''}{c.name}</Badge>
                                     ))}
                                 </div>

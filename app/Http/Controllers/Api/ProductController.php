@@ -3,72 +3,23 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
 use App\Models\Discount;
 use App\Models\Product;
+use App\Models\Review;
+use App\Services\CatalogCache;
+use App\Services\CatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        protected CatalogService $catalog = new CatalogService,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
-        $query = Product::active()
-            ->with('brand')
-            ->withCount('variants');
-
-        $query->with(['images' => fn ($q) => $q->primary()->limit(1)]);
-
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%");
-            });
-        }
-
-        if ($brandId = $request->query('brand_id')) {
-            $query->where('brand_id', $brandId);
-        }
-
-        if ($categoryId = $request->query('category_id')) {
-            $categoryIds = $this->getDescendantCategoryIds($categoryId);
-            $query->whereHas('categories', fn ($q) => $q->whereIn('categories.id', $categoryIds));
-        }
-
-        if ($request->has('is_featured')) {
-            $query->where('is_featured', $request->boolean('is_featured'));
-        }
-
-        if ($discountId = $request->query('discount_id')) {
-            $discount = Discount::with('categories', 'brands')->find($discountId);
-            if ($discount) {
-                $query->where(function ($q) use ($discount) {
-                    $q->whereHas('discounts', fn ($dq) => $dq->where('discounts.id', $discount->id));
-
-                    if ($discount->categories->isNotEmpty()) {
-                        $categoryIds = $discount->categories->pluck('id')->flatMap(fn ($id) => $this->getDescendantCategoryIds($id))->unique();
-                        $q->orWhereHas('categories', fn ($cq) => $cq->whereIn('categories.id', $categoryIds));
-                    }
-
-                    if ($discount->brands->isNotEmpty()) {
-                        $brandIds = $discount->brands->pluck('id');
-                        $q->orWhereIn('brand_id', $brandIds);
-                    }
-                });
-            }
-        }
-
-        $sort = $request->query('sort', 'name');
-        $direction = $request->query('direction', 'asc');
-        $allowed = ['name', 'price', 'created_at'];
-
-        if (in_array($sort, $allowed)) {
-            $query->orderBy($sort, $direction === 'desc' ? 'desc' : 'asc');
-        }
-
-        $products = $query->paginate($request->integer('per_page', 15))->withQueryString();
-
-        $products->getCollection()->transform(fn ($product) => $this->formatProduct($product));
+        $products = $this->catalog->paginate($request->query());
 
         return response()->json([
             'success' => true,
@@ -78,14 +29,7 @@ class ProductController extends Controller
 
     public function featured(): JsonResponse
     {
-        $products = Product::active()
-            ->featured()
-            ->with(['brand', 'images' => fn ($q) => $q->primary()->limit(1)])
-            ->withCount('variants')
-            ->orderBy('sort_order')
-            ->limit($limit = 12)
-            ->get()
-            ->map(fn ($product) => $this->formatProduct($product));
+        $products = CatalogCache::rememberFeatured(fn () => $this->catalog->featured());
 
         return response()->json([
             'success' => true,
@@ -148,6 +92,11 @@ class ProductController extends Controller
             $bestDiscount = $product->discounts->firstWhere('id', $bestDiscountId);
         }
 
+        $reviewSummary = [
+            'total' => Review::approved()->where('product_id', $product->id)->count(),
+            'average' => (float) Review::approved()->where('product_id', $product->id)->avg('rating'),
+        ];
+
         $variantDiscounts = [];
         if ($product->isVariable()) {
             $variantIds = $product->variants->pluck('id')->toArray();
@@ -191,9 +140,11 @@ class ProductController extends Controller
             'success' => true,
             'data' => [
                 'id' => $product->id,
-                'name' => $product->name,
+                'name' => $product->displayName(),
+                'name_ar' => $product->name_ar,
                 'slug' => $product->slug,
-                'description' => $product->description,
+                'description' => $product->displayDescription(),
+                'description_ar' => $product->description_ar,
                 'short_description' => $product->short_description,
                 'sku' => $product->sku,
                 'barcode' => $product->barcode,
@@ -205,12 +156,12 @@ class ProductController extends Controller
                 'created_at' => $product->created_at,
                 'brand' => $product->brand ? [
                     'id' => $product->brand->id,
-                    'name' => $product->brand->name,
+                    'name' => $product->brand->displayName(),
                     'slug' => $product->brand->slug,
                 ] : null,
                 'categories' => $product->categories->map(fn ($c) => [
                     'id' => $c->id,
-                    'name' => $c->name,
+                    'name' => $c->displayName(),
                     'slug' => $c->slug,
                 ]),
                 'images' => $product->images->map(fn ($img) => [
@@ -231,43 +182,8 @@ class ProductController extends Controller
                     'value' => (float) $bestDiscount->value,
                 ] : null,
                 'variant_discounts' => $variantDiscounts,
+                'review_summary' => $reviewSummary,
             ],
         ]);
-    }
-
-    private function formatProduct(Product $product): array
-    {
-        $image = $product->images->first();
-
-        return [
-            'id' => $product->id,
-            'name' => $product->name,
-            'slug' => $product->slug,
-            'short_description' => $product->short_description,
-            'sku' => $product->sku,
-            'type' => $product->type,
-            'price' => (float) $product->price,
-            'compare_at_price' => $product->compare_at_price ? (float) $product->compare_at_price : null,
-            'is_featured' => $product->is_featured,
-            'brand' => $product->brand ? [
-                'id' => $product->brand->id,
-                'name' => $product->brand->name,
-                'slug' => $product->brand->slug,
-            ] : null,
-            'primary_image' => $image?->getUrl('medium'),
-            'variants_count' => $product->variants_count,
-        ];
-    }
-
-    private function getDescendantCategoryIds(int $categoryId): array
-    {
-        $ids = [$categoryId];
-        $children = Category::where('parent_id', $categoryId)->pluck('id')->toArray();
-
-        foreach ($children as $childId) {
-            $ids = array_merge($ids, $this->getDescendantCategoryIds($childId));
-        }
-
-        return $ids;
     }
 }

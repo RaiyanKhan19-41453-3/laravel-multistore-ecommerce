@@ -433,7 +433,7 @@ export default function OrderConfirmation() {
                                                 Tracking: <span className="font-mono">{shipment.tracking_number}</span>
                                             </p>
                                         </div>
-                                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-800 dark:text-blue-200">
+                                        <span className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-800 dark:text-blue-200">
                                             {shipment.status.replace('_', ' ')}
                                         </span>
                                     </div>

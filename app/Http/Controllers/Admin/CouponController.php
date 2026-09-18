@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Coupon;
 use App\Models\Discount;
+use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,8 +25,10 @@ class CouponController extends Controller
 
     public function store(Request $request, Discount $discount): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
-            'code' => 'required|string|max:50|unique:coupons,code',
+            'code' => ['required', 'string', 'max:50', Rule::unique('coupons', 'code')->where('store_id', $storeId)],
             'usage_limit' => 'nullable|integer|min:1',
             'per_user_limit' => 'nullable|integer|min:1',
             'starts_at' => 'nullable|date',
@@ -35,7 +39,15 @@ class CouponController extends Controller
         $validated['code'] = strtoupper($validated['code']);
         $validated['discount_id'] = $discount->id;
 
-        Coupon::create($validated);
+        $coupon = Coupon::create($validated);
+
+        // Coupons live on their discount's store, even when the request
+        // resolved elsewhere. Set directly (bypasses fillable); the
+        // central auto-fill skips non-empty values, so this wins.
+        if ($discount->store_id !== null && $coupon->store_id !== $discount->store_id) {
+            $coupon->store_id = $discount->store_id;
+            $coupon->save();
+        }
 
         return to_route('admin.discounts.show', $discount);
     }
@@ -46,8 +58,10 @@ class CouponController extends Controller
             abort(422, 'Coupon does not belong to this discount.');
         }
 
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
-            'code' => 'required|string|max:50|unique:coupons,code,'.$coupon->id,
+            'code' => ['required', 'string', 'max:50', Rule::unique('coupons', 'code')->ignore($coupon->id)->where('store_id', $storeId)],
             'usage_limit' => 'nullable|integer|min:1',
             'per_user_limit' => 'nullable|integer|min:1',
             'starts_at' => 'nullable|date',

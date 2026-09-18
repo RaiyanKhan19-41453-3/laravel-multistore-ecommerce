@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedCatalog;
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,12 +13,14 @@ use Illuminate\Support\Str;
 
 class Brand extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasLocalizedCatalog, SoftDeletes;
 
     protected $fillable = [
         'name',
+        'name_ar',
         'slug',
         'description',
+        'description_ar',
         'logo',
         'is_active',
         'sort_order',
@@ -32,6 +36,8 @@ class Brand extends Model
 
     protected static function booted(): void
     {
+        static::addGlobalScope(new BelongsToStore);
+
         static::creating(function (Brand $brand) {
             if (empty($brand->slug)) {
                 $brand->slug = Str::slug($brand->name);

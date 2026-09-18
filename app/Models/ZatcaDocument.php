@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,13 @@ class ZatcaDocument extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new BelongsToStore);
+    }
+
     protected $fillable = [
+        'store_id',
         'order_id',
         'device_serial',
         'type',

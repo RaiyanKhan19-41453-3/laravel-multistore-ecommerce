@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasLocalizedCatalog;
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,13 +15,15 @@ use Illuminate\Support\Str;
 
 class Category extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasLocalizedCatalog, SoftDeletes;
 
     protected $fillable = [
         'parent_id',
         'name',
+        'name_ar',
         'slug',
         'description',
+        'description_ar',
         'is_active',
         'sort_order',
     ];
@@ -34,6 +38,8 @@ class Category extends Model
 
     protected static function booted(): void
     {
+        static::addGlobalScope(new BelongsToStore);
+
         static::creating(function (Category $category) {
             if (empty($category->slug)) {
                 $category->slug = Str::slug($category->name);

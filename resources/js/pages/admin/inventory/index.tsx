@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { AlertTriangle, ArrowUpDown, Box, ChevronDown, ChevronRight, History, MinusCircle, Package, PackageX, PlusCircle, Search, Warehouse } from 'lucide-react';
+import { AlertTriangle, Box, ChevronDown, ChevronRight, History, MinusCircle, Package, PackageX, PlusCircle, Search, Warehouse } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface InventoryItem {

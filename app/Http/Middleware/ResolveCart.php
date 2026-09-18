@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\User;
 use App\Services\CartService;
+use App\Support\CurrentStore;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -17,21 +18,22 @@ class ResolveCart
     public function handle(Request $request, Closure $next): Response
     {
         $cart = null;
+        $storeId = app(CurrentStore::class)->scopeId();
         $bearerUser = $this->resolveBearerUser($request);
 
         if ($bearerUser) {
-            $cart = $this->cartService->getOrCreateForUser($bearerUser);
+            $cart = $this->cartService->getOrCreateForUser($bearerUser, $storeId);
         } elseif ($request->hasHeader('X-Guest-Token')) {
             $guestToken = $request->header('X-Guest-Token');
-            $cart = $this->cartService->getOrCreateForGuest($guestToken);
+            $cart = $this->cartService->getOrCreateForGuest($guestToken, $storeId);
         } elseif ($request->user()) {
-            $cart = $this->cartService->getOrCreateForUser($request->user());
+            $cart = $this->cartService->getOrCreateForUser($request->user(), $storeId);
         } elseif ($request->cookie('store_guest_token')) {
             $guestToken = $request->cookie('store_guest_token');
-            $cart = $this->cartService->getOrCreateForGuest($guestToken);
+            $cart = $this->cartService->getOrCreateForGuest($guestToken, $storeId);
         } else {
             $guestToken = Str::uuid()->toString();
-            $cart = $this->cartService->getOrCreateForGuest($guestToken);
+            $cart = $this->cartService->getOrCreateForGuest($guestToken, $storeId);
         }
 
         $request->attributes->set('cart', $cart);

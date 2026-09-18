@@ -67,7 +67,7 @@ class BkashGateway implements PaymentGateway
             ]);
 
             throw new \RuntimeException(
-                $data['statusMessage'] ?? 'bKash API error: '.$response->body()
+                'bKash payment could not be started. Please try again.'
             );
         }
 
@@ -202,8 +202,10 @@ class BkashGateway implements PaymentGateway
         $data = $response->json();
 
         if ($response->failed() || empty($data['id_token'])) {
+            Log::error('bKash token grant failed', ['status' => $response->status(), 'response' => $data]);
+
             throw new \RuntimeException(
-                'bKash token grant failed: '.($data['errorMessage'] ?? $response->body())
+                'bKash payment could not be started. Please try again.'
             );
         }
 

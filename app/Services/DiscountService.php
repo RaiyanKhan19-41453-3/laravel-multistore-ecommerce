@@ -22,6 +22,7 @@ class DiscountService
         $categoryIds = $product->categories()->pluck('categories.id');
 
         return Discount::where('is_active', true)
+            ->when($product->store_id, fn ($q) => $q->where('discounts.store_id', $product->store_id))
             ->where('coupon_only', false)
             ->where(function ($query) use ($now) {
                 $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
@@ -49,6 +50,7 @@ class DiscountService
         $now = now();
 
         return Discount::where('is_active', true)
+            ->when($category->store_id, fn ($q) => $q->where('discounts.store_id', $category->store_id))
             ->where('coupon_only', false)
             ->where(function ($query) use ($now) {
                 $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
@@ -73,6 +75,7 @@ class DiscountService
         $now = now();
 
         return Discount::where('is_active', true)
+            ->when($brand->store_id, fn ($q) => $q->where('discounts.store_id', $brand->store_id))
             ->where('coupon_only', false)
             ->where(function ($query) use ($now) {
                 $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
@@ -247,7 +250,7 @@ class DiscountService
         return $best;
     }
 
-    public function bestDiscountForOrder(float $subtotal, ?string $couponCode = null, array $productIds = [], array $productTotals = [], array $variantIds = [], array $items = [], ?string $couponIdentifier = null): ?array
+    public function bestDiscountForOrder(float $subtotal, ?string $couponCode = null, array $productIds = [], array $productTotals = [], array $variantIds = [], array $items = [], ?string $couponIdentifier = null, ?int $storeId = null): ?array
     {
         $now = now();
 
@@ -267,6 +270,7 @@ class DiscountService
         }
 
         $automaticQuery = Discount::where('is_active', true)
+            ->when($storeId !== null, fn ($q) => $q->where('discounts.store_id', $storeId))
             ->when($couponDiscountId, fn ($q) => $q->where('id', '!=', $couponDiscountId))
             ->where(function ($query) {
                 $query->whereNull('usage_limit')
@@ -561,7 +565,7 @@ class DiscountService
                 }
             }
 
-            return $eligibleSubtotal > 0 ? $eligibleSubtotal : $fallbackSubtotal;
+            return (float) $eligibleSubtotal;
         }
 
         $eligibleProductIds = $this->getEligibleProductIds($discount, $productIds, $variantIds);
@@ -591,7 +595,7 @@ class DiscountService
             }
         }
 
-        return $fallbackSubtotal;
+        return $this->getTargeting($discount)['level'] === 'sitewide' ? $fallbackSubtotal : 0.0;
     }
 
     private function whereNoTargets($query): void

@@ -9,10 +9,13 @@ use App\Models\Category;
 use App\Models\Discount;
 use App\Models\Product;
 use App\Services\InventoryService;
+use App\Support\AdminStoreContext;
+use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -114,8 +117,10 @@ class ProductController extends Controller
             'products' => $products,
             'brands' => Brand::active()->orderBy('name')->get(['id', 'name']),
             'categories' => Category::active()->orderBy('name')->get(['id', 'name', 'parent_id']),
-            'discounts' => Discount::orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only(['search', 'brand_id', 'category_id', 'is_active', 'is_featured', 'discount_id', 'sort', 'direction']),
+            'discounts' => Discount::query()->orderBy('name')->get(['id', 'name']),
+            // Cast to object so empty filters serialize as {} not [] ([]  would
+            // expose Array.prototype members like .sort to the client).
+            'filters' => (object) $request->only(['search', 'brand_id', 'category_id', 'is_active', 'is_featured', 'discount_id', 'sort', 'direction']),
         ]);
     }
 
@@ -149,16 +154,19 @@ class ProductController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+        $adminStores = app(AdminStoreContext::class);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:products,slug',
-            'brand_id' => 'nullable|exists:brands,id',
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('products', 'slug')->where('store_id', $storeId)],
+            'brand_id' => ['nullable', $adminStores->existsInStore('brands', $storeId)],
             'type' => 'required|in:simple,variable',
             'category_ids' => 'array',
-            'category_ids.*' => 'exists:categories,id',
+            'category_ids.*' => [$adminStores->existsInStore('categories', $storeId)],
             'description' => 'nullable|string',
             'short_description' => 'nullable|string|max:500',
-            'sku' => 'required|string|max:255|unique:products,sku',
+            'sku' => ['required', 'string', 'max:255', Rule::unique('products', 'sku')->where('store_id', $storeId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required_if:type,simple|nullable|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',
@@ -168,7 +176,7 @@ class ProductController extends Controller
             'is_featured' => 'boolean',
             'sort_order' => 'integer|min:0',
             'attribute_ids' => 'array',
-            'attribute_ids.*' => 'exists:attributes,id',
+            'attribute_ids.*' => [$adminStores->existsInStore('attributes', $storeId)],
         ]);
 
         $validated['slug'] = Str::slug($validated['slug'] ?? $validated['name']);
@@ -237,16 +245,20 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+        $adminStores = app(AdminStoreContext::class);
+        $targetStoreId = $adminStores->anchorStoreId($product);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:products,slug,'.$product->id,
-            'brand_id' => 'nullable|exists:brands,id',
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('products', 'slug')->ignore($product->id)->where('store_id', $storeId)],
+            'brand_id' => ['nullable', $adminStores->existsInStore('brands', $targetStoreId)],
             'type' => 'required|in:simple,variable',
             'category_ids' => 'array',
-            'category_ids.*' => 'exists:categories,id',
+            'category_ids.*' => [$adminStores->existsInStore('categories', $targetStoreId)],
             'description' => 'nullable|string',
             'short_description' => 'nullable|string|max:500',
-            'sku' => 'required|string|max:255|unique:products,sku,'.$product->id,
+            'sku' => ['required', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($product->id)->where('store_id', $storeId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required_if:type,simple|nullable|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',
@@ -256,7 +268,7 @@ class ProductController extends Controller
             'is_featured' => 'boolean',
             'sort_order' => 'integer|min:0',
             'attribute_ids' => 'array',
-            'attribute_ids.*' => 'exists:attributes,id',
+            'attribute_ids.*' => [$adminStores->existsInStore('attributes', $targetStoreId)],
         ]);
 
         $validated['slug'] = Str::slug($validated['slug'] ?? $validated['name']);

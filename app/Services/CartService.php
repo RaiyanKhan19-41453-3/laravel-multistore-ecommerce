@@ -8,6 +8,8 @@ use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
+use App\Support\CurrentStore;
+use Illuminate\Support\Facades\DB;
 
 class CartService
 {
@@ -16,27 +18,37 @@ class CartService
         protected DiscountService $discountService,
     ) {}
 
-    public function getOrCreateForUser(User $user): Cart
+    public function getOrCreateForUser(User $user, ?int $storeId = null): Cart
     {
+        $storeId ??= app(CurrentStore::class)->scopeId();
+
+        $attributes = ['user_id' => $user->id, 'status' => 'active'];
+
+        if ($storeId !== null) {
+            $attributes['store_id'] = $storeId;
+        }
+
         return Cart::firstOrCreate(
-            ['user_id' => $user->id, 'status' => 'active'],
+            $attributes,
             ['status' => 'active', 'expires_at' => now()->addDays(30)]
         );
     }
 
-    public function getOrCreateForGuest(string $guestToken): Cart
+    public function getOrCreateForGuest(string $guestToken, ?int $storeId = null): Cart
     {
-        $existing = Cart::where('guest_token', $guestToken)
-            ->where('status', 'active')
-            ->first();
+        $storeId ??= app(CurrentStore::class)->scopeId();
 
-        if ($existing) {
+        $base = Cart::where('guest_token', $guestToken);
+
+        if ($storeId !== null) {
+            $base->where('store_id', $storeId);
+        }
+
+        if ($existing = (clone $base)->where('status', 'active')->first()) {
             return $existing;
         }
 
-        $cleared = Cart::where('guest_token', $guestToken)
-            ->whereIn('status', ['expired', 'abandoned'])
-            ->first();
+        $cleared = (clone $base)->whereIn('status', ['expired', 'abandoned', 'merged'])->first();
 
         if ($cleared) {
             $cleared->update(['status' => 'active', 'expires_at' => now()->addDays(30)]);
@@ -44,36 +56,57 @@ class CartService
             return $cleared;
         }
 
-        return Cart::create([
-            'guest_token' => $guestToken,
-            'status' => 'active',
-            'expires_at' => now()->addDays(30),
-        ]);
+        // findOrCreate handles the race window between the queries above
+        // and the insert where two concurrent requests could both pass.
+        $attributes = ['guest_token' => $guestToken];
+
+        if ($storeId !== null) {
+            $attributes['store_id'] = $storeId;
+        }
+
+        return Cart::firstOrCreate(
+            $attributes,
+            ['status' => 'active', 'expires_at' => now()->addDays(30)],
+        );
     }
 
     public function addItem(Cart $cart, Product $product, ?ProductVariant $variant, int $quantity): Cart
     {
         $this->validateProduct($product, $variant);
 
-        $existingItem = $cart->items()
-            ->where('product_id', $product->id)
-            ->where('product_variant_id', $variant?->id)
-            ->first();
+        return DB::transaction(function () use ($cart, $product, $variant, $quantity): Cart {
+            $cart = Cart::lockForUpdate()->findOrFail($cart->id);
+            $this->assertSameStore($cart, $product, $variant);
 
-        if ($existingItem) {
-            $this->updateQuantity($existingItem, $existingItem->quantity + $quantity);
-        } else {
-            $inventory = $this->getInventory($product, $variant);
-            $this->inventoryService->reserve($inventory, $quantity);
+            // A legacy store-less cart adopts its first item's store so the
+            // cart, its items, and the resulting order stay on one store.
+            if ($cart->store_id === null && $product->store_id !== null) {
+                $cart->store_id = $product->store_id;
+                $cart->save();
+            }
 
-            $cart->items()->create([
-                'product_id' => $product->id,
-                'product_variant_id' => $variant?->id,
-                'quantity' => $quantity,
-            ]);
-        }
+            $existingItem = $cart->items()
+                ->where('product_id', $product->id)
+                ->where('product_variant_id', $variant?->id)
+                ->lockForUpdate()
+                ->first();
 
-        return $cart->fresh('items');
+            if ($existingItem) {
+                $this->updateQuantity($existingItem, $existingItem->quantity + $quantity);
+            } else {
+                $inventory = $this->getInventory($product, $variant);
+                $this->inventoryService->reserve($inventory, $quantity);
+
+                $cart->items()->create([
+                    'store_id' => $cart->store_id ?? $product->store_id,
+                    'product_id' => $product->id,
+                    'product_variant_id' => $variant?->id,
+                    'quantity' => $quantity,
+                ]);
+            }
+
+            return $cart->fresh('items');
+        });
     }
 
     public function updateQuantity(CartItem $item, int $quantity): void
@@ -82,24 +115,30 @@ class CartService
             throw new \InvalidArgumentException('Quantity must be at least 1.');
         }
 
-        $inventory = $this->getInventory($item->product, $item->productVariant);
-        $delta = $quantity - $item->quantity;
+        DB::transaction(function () use ($item, $quantity): void {
+            $item = CartItem::lockForUpdate()->findOrFail($item->id);
+            $inventory = $this->getInventory($item->product, $item->productVariant);
+            $delta = $quantity - $item->quantity;
 
-        if ($delta > 0) {
-            $this->inventoryService->reserve($inventory, $delta);
-        } elseif ($delta < 0) {
-            $this->inventoryService->release($inventory, abs($delta));
-        }
+            if ($delta > 0) {
+                $this->inventoryService->reserve($inventory, $delta);
+            } elseif ($delta < 0) {
+                $this->inventoryService->release($inventory, abs($delta));
+            }
 
-        $item->update(['quantity' => $quantity]);
+            $item->update(['quantity' => $quantity]);
+        });
     }
 
     public function removeItem(CartItem $item): void
     {
-        $inventory = $this->getInventory($item->product, $item->productVariant);
-        $this->inventoryService->release($inventory, $item->quantity);
+        DB::transaction(function () use ($item): void {
+            $item = CartItem::lockForUpdate()->findOrFail($item->id);
+            $inventory = $this->getInventory($item->product, $item->productVariant);
+            $this->inventoryService->release($inventory, $item->quantity);
 
-        $item->delete();
+            $item->delete();
+        });
     }
 
     public function clearCart(Cart $cart): void
@@ -111,15 +150,34 @@ class CartService
 
     public function mergeGuestCart(User $user, string $guestToken): void
     {
-        $guestCart = Cart::where('guest_token', $guestToken)
-            ->where('status', 'active')
-            ->first();
+        $storeId = app(CurrentStore::class)->scopeId();
+
+        $guestQuery = Cart::where('guest_token', $guestToken)
+            ->where('status', 'active');
+
+        if ($storeId !== null) {
+            $guestQuery->where('store_id', $storeId);
+        }
+
+        $guestCart = $guestQuery->first();
 
         if (! $guestCart || $guestCart->items->isEmpty()) {
             return;
         }
 
-        $userCart = $this->getOrCreateForUser($user);
+        $userCart = $this->getOrCreateForUser($user, $guestCart->store_id ?? $storeId);
+
+        // Never blend stores: a guest cart from another store stays
+        // untouched instead of polluting this store's cart.
+        if ($guestCart->store_id !== null && $userCart->store_id !== null
+            && $guestCart->store_id !== $userCart->store_id) {
+            return;
+        }
+
+        if ($userCart->store_id === null && $guestCart->store_id !== null) {
+            $userCart->store_id = $guestCart->store_id;
+            $userCart->save();
+        }
 
         foreach ($guestCart->items as $guestItem) {
             $existingItem = $userCart->items()
@@ -130,12 +188,12 @@ class CartService
             if ($existingItem) {
                 $newQuantity = $existingItem->quantity + $guestItem->quantity;
 
+                $this->releaseGuestItemReservation($guestItem);
+
                 try {
-                    $this->releaseGuestItemReservation($guestItem);
                     $this->updateQuantity($existingItem, $newQuantity);
                     $guestItem->delete();
                 } catch (\InvalidArgumentException) {
-                    $this->releaseGuestItemReservation($guestItem);
                     $guestItem->delete();
                 }
             } else {
@@ -148,7 +206,11 @@ class CartService
         }
 
         if ($guestCart->coupon_id && ! $userCart->coupon_id) {
-            $userCart->update(['coupon_id' => $guestCart->coupon_id]);
+            $couponStoreId = $guestCart->coupon?->store_id;
+
+            if ($couponStoreId === null || $userCart->store_id === null || $couponStoreId === $userCart->store_id) {
+                $userCart->update(['coupon_id' => $guestCart->coupon_id]);
+            }
         }
 
         $guestCart->update(['status' => 'merged']);
@@ -159,6 +221,14 @@ class CartService
         $coupon = $this->discountService->applyCoupon($code);
 
         if (! $coupon) {
+            return null;
+        }
+
+        // The coupon lookup already scopes to the current store, but the
+        // cart may belong to another store (stale cookie). Never apply
+        // cross-store coupons.
+        if ($coupon->store_id !== null && $cart->store_id !== null
+            && $coupon->store_id !== $cart->store_id) {
             return null;
         }
 
@@ -240,6 +310,7 @@ class CartService
             $variantIds,
             $discountItems,
             $cart->user_id ? $this->discountService->redemptionIdentifier($cart->user, null) : null,
+            $cart->store_id,
         );
 
         $discountTotal = 0;
@@ -326,12 +397,33 @@ class CartService
             throw new \InvalidArgumentException('Product variant does not belong to this product.');
         }
 
+        if ($variant && $variant->store_id !== null && $product->store_id !== null
+            && $variant->store_id !== $product->store_id) {
+            throw new \InvalidArgumentException('Product variant does not belong to this product.');
+        }
+
         if ($product->isVariable() && ! $variant) {
             throw new \InvalidArgumentException('This product requires a variant selection.');
         }
 
         if (! $product->isVariable() && $variant) {
             throw new \InvalidArgumentException('Simple products cannot have a variant.');
+        }
+    }
+
+    /**
+     * Reject items from another store instead of blending carts.
+     */
+    private function assertSameStore(Cart $cart, Product $product, ?ProductVariant $variant): void
+    {
+        if ($cart->store_id !== null && $product->store_id !== null
+            && $cart->store_id !== $product->store_id) {
+            throw new \InvalidArgumentException('This product is not available in the current store.');
+        }
+
+        if ($variant && $cart->store_id !== null && $variant->store_id !== null
+            && $cart->store_id !== $variant->store_id) {
+            throw new \InvalidArgumentException('This product is not available in the current store.');
         }
     }
 

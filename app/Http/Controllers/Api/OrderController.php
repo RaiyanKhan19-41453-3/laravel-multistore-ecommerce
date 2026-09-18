@@ -38,6 +38,8 @@ class OrderController extends Controller
             ->with(['items.product', 'items.productVariant', 'payments', 'coupon', 'shipments'])
             ->findOrFail($order);
 
+        $order->payments->each(fn ($payment) => $payment->makeHidden('gateway_response'));
+
         return response()->json([
             'success' => true,
             'data' => $order,
@@ -141,9 +143,9 @@ class OrderController extends Controller
             return null;
         }
 
-        $seller = config('zatca.seller', []);
+        $seller = $this->taxService->sellerProfile($order->store_id);
 
-        if (! $this->taxService->hasValidSellerProfile()) {
+        if (! $this->taxService->hasValidSellerProfile($order->store_id)) {
             return null;
         }
 

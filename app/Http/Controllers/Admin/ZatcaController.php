@@ -6,15 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SubmitZatcaDocument;
 use App\Models\ZatcaDevice;
 use App\Models\ZatcaDocument;
+use App\Services\Zatca\ZatcaDocumentService;
+use App\Support\AdminStoreContext;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ZatcaController extends Controller
 {
-    public function index(): Response
+    public function index(AdminStoreContext $stores, ZatcaDocumentService $zatca): Response
     {
-        $documents = ZatcaDocument::with('order:id,order_number')
+        $selectedId = $stores->selectedId();
+
+        $documentsQuery = $stores->scope(ZatcaDocument::with('order:id,order_number'));
+
+        $documents = $documentsQuery
             ->latest()
             ->paginate(20)
             ->through(fn (ZatcaDocument $document) => [
@@ -29,9 +35,12 @@ class ZatcaController extends Controller
                 'created_at' => $document->created_at,
             ]);
 
-        $device = ZatcaDevice::find(config('zatca.device.serial', 'default'));
+        $device = $zatca->deviceForStore($selectedId)
+            ?? ZatcaDevice::find(config('zatca.device.serial', 'default'));
 
-        $counts = ZatcaDocument::selectRaw('status, COUNT(*) as total')
+        $countsQuery = $stores->scope(ZatcaDocument::query());
+
+        $counts = $countsQuery->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
 

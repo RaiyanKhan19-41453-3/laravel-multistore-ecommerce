@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Scopes\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,6 +11,11 @@ use Illuminate\Validation\ValidationException;
 class ShippingZone extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new BelongsToStore);
+    }
 
     protected $fillable = [
         'name',
@@ -62,13 +68,17 @@ class ShippingZone extends Model
         return false;
     }
 
-    public static function validateNoDuplicateCities(?int $exceptId = null, ?array $cities = null, bool $isFallback = false): void
+    public static function validateNoDuplicateCities(?int $exceptId = null, ?array $cities = null, bool $isFallback = false, ?int $storeId = null): void
     {
         if ($isFallback || empty($cities)) {
             return;
         }
 
         $query = static::active()->nonFallback();
+
+        if ($storeId !== null) {
+            $query->where('store_id', $storeId);
+        }
 
         if ($exceptId) {
             $query->where('id', '!=', $exceptId);

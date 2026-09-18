@@ -9,6 +9,7 @@ use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
+use App\Services\CartService;
 
 it('returns empty cart for unauthenticated guest', function () {
     $response = $this->getJson('/api/cart', [
@@ -154,6 +155,89 @@ it('can update cart item quantity', function () {
 
     $inventory = Inventory::where('product_id', $product->id)->first();
     $this->assertEquals(5, $inventory->reserved_quantity);
+});
+
+it('keeps reservations accurate when stale cart items are updated twice', function (int $quantity) {
+    $product = Product::factory()->create(['is_active' => true]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+    $service = app(CartService::class);
+    $cart = $service->getOrCreateForGuest('stale-quantity');
+    $item = $service->addItem($cart, $product, null, 2)->items->first();
+    $staleItem = $item->fresh();
+
+    $service->updateQuantity($item, 5);
+    $service->updateQuantity($staleItem, $quantity);
+
+    $this->assertDatabaseHas('cart_items', ['id' => $item->id, 'quantity' => $quantity]);
+    $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'reserved_quantity' => $quantity]);
+})->with(['increase' => 7, 'decrease' => 3, 'unchanged' => 5]);
+
+it('rolls back reservations when adding a cart item fails', function () {
+    $product = Product::factory()->create(['is_active' => true]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+    $service = app(CartService::class);
+    $cart = $service->getOrCreateForGuest('failed-add');
+    $dispatcher = CartItem::getEventDispatcher();
+    CartItem::setEventDispatcher(clone $dispatcher);
+    CartItem::creating(function (): void {
+        throw new RuntimeException('Cart item write failed.');
+    });
+
+    try {
+        expect(fn () => $service->addItem($cart, $product, null, 2))
+            ->toThrow(RuntimeException::class, 'Cart item write failed.');
+    } finally {
+        CartItem::setEventDispatcher($dispatcher);
+    }
+
+    $this->assertDatabaseMissing('cart_items', ['cart_id' => $cart->id]);
+    $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'reserved_quantity' => 0]);
+});
+
+it('rolls back reservations when updating a cart item fails', function (int $quantity) {
+    $product = Product::factory()->create(['is_active' => true]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+    $service = app(CartService::class);
+    $cart = $service->getOrCreateForGuest('failed-update');
+    $item = $service->addItem($cart, $product, null, 3)->items->first();
+    $dispatcher = CartItem::getEventDispatcher();
+    CartItem::setEventDispatcher(clone $dispatcher);
+    CartItem::updating(function (): void {
+        throw new RuntimeException('Cart item write failed.');
+    });
+
+    try {
+        expect(fn () => $service->updateQuantity($item, $quantity))
+            ->toThrow(RuntimeException::class, 'Cart item write failed.');
+    } finally {
+        CartItem::setEventDispatcher($dispatcher);
+    }
+
+    $this->assertDatabaseHas('cart_items', ['id' => $item->id, 'quantity' => 3]);
+    $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'reserved_quantity' => 3]);
+})->with(['increase' => 5, 'decrease' => 1]);
+
+it('rolls back reservations when removing a cart item fails', function () {
+    $product = Product::factory()->create(['is_active' => true]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+    $service = app(CartService::class);
+    $cart = $service->getOrCreateForGuest('failed-remove');
+    $item = $service->addItem($cart, $product, null, 3)->items->first();
+    $dispatcher = CartItem::getEventDispatcher();
+    CartItem::setEventDispatcher(clone $dispatcher);
+    CartItem::deleting(function (): void {
+        throw new RuntimeException('Cart item write failed.');
+    });
+
+    try {
+        expect(fn () => $service->removeItem($item))
+            ->toThrow(RuntimeException::class, 'Cart item write failed.');
+    } finally {
+        CartItem::setEventDispatcher($dispatcher);
+    }
+
+    $this->assertDatabaseHas('cart_items', ['id' => $item->id, 'quantity' => 3]);
+    $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'reserved_quantity' => 3]);
 });
 
 it('can remove cart item and release stock', function () {
@@ -481,6 +565,38 @@ it('merge does not double-reserve inventory', function () {
 
     $inventory = Inventory::where('product_id', $product->id)->first();
     $this->assertEquals(3, $inventory->reserved_quantity);
+});
+
+it('preserves unrelated reservations when a duplicate cart merge fails', function () {
+    $user = User::factory()->create();
+    $product = Product::factory()->create(['is_active' => true]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(50)->create();
+    $service = app(CartService::class);
+    $userCart = $service->getOrCreateForUser($user);
+    $userItem = $service->addItem($userCart, $product, null, 3)->items->first();
+    $guestCart = $service->getOrCreateForGuest('failed-merge');
+    $guestItem = $service->addItem($guestCart, $product, null, 2)->items->first();
+    $otherCart = $service->getOrCreateForGuest('unrelated-reservation');
+    $otherItem = $service->addItem($otherCart, $product, null, 4)->items->first();
+    $dispatcher = Inventory::getEventDispatcher();
+    Inventory::setEventDispatcher(clone $dispatcher);
+    Inventory::updating(function (Inventory $inventory): void {
+        if ($inventory->reserved_quantity > $inventory->getOriginal('reserved_quantity')) {
+            throw new InvalidArgumentException('Reservation unavailable.');
+        }
+    });
+
+    try {
+        $service->mergeGuestCart($user, 'failed-merge');
+    } finally {
+        Inventory::setEventDispatcher($dispatcher);
+    }
+
+    $this->assertDatabaseHas('cart_items', ['id' => $userItem->id, 'quantity' => 3]);
+    $this->assertDatabaseHas('cart_items', ['id' => $otherItem->id, 'cart_id' => $otherCart->id, 'quantity' => 4]);
+    $this->assertModelMissing($guestItem);
+    $this->assertDatabaseHas('carts', ['id' => $guestCart->id, 'status' => 'merged']);
+    $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'reserved_quantity' => 7]);
 });
 
 it('rejects applying an exhausted coupon at cart time', function () {

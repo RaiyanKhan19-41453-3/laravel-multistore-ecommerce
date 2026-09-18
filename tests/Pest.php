@@ -8,8 +8,11 @@ use App\Models\ShippingMethod;
 use App\Models\ShippingRate;
 use App\Models\ShippingZone;
 use App\Models\User;
+use App\Support\AdminStoreContext;
+use App\Support\CurrentStore;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 /*
@@ -26,6 +29,12 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+afterEach(function () {
+    app(CurrentStore::class)->forget();
+    app(AdminStoreContext::class)->clearOverride();
+    session()->forget(AdminStoreContext::SESSION_KEY);
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -157,9 +166,33 @@ function decodeTlv(string $raw): array
 
 function createAdmin(): User
 {
+    ensureStaffPermissions();
+
     $user = User::factory()->create();
-    Role::findOrCreate('super-admin', 'web');
     $user->assignRole('super-admin');
 
     return $user;
+}
+
+function createStaffUser(string $role): User
+{
+    ensureStaffPermissions();
+
+    $user = User::factory()->create();
+    $user->assignRole($role);
+
+    return $user;
+}
+
+/**
+ * Seed roles and permissions when the test database has none.
+ * RefreshDatabase wipes them between tests, so this runs per test
+ * that needs authorization. The seeder clears Spatie's permission
+ * cache first, which also drops stale entries from earlier tests.
+ */
+function ensureStaffPermissions(): void
+{
+    if (Permission::where('guard_name', 'web')->count() === 0) {
+        (new PermissionSeeder)->run();
+    }
 }

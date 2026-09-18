@@ -47,9 +47,9 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1|max:100',
         ]);
 
-        $product = Product::findOrFail($validated['product_id']);
+        $product = Product::query()->findOrFail($validated['product_id']);
         $variant = isset($validated['product_variant_id'])
-            ? ProductVariant::findOrFail($validated['product_variant_id'])
+            ? ProductVariant::query()->findOrFail($validated['product_variant_id'])
             : null;
 
         try {

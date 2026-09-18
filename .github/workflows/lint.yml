@@ -30,13 +30,16 @@ jobs:
           npm install
 
       - name: Run Pint
-        run: vendor/bin/pint
+        run: vendor/bin/pint --test
 
       - name: Format Frontend
         run: npm run format
 
       - name: Lint Frontend
         run: npm run lint
+
+      - name: Typecheck Frontend
+        run: npm run types
 
       # - name: Commit Changes
       #   uses: stefanzweifel/git-auto-commit-action@v5

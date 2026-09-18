@@ -18,14 +18,12 @@ function BarcodeImage({ svg, className }: { svg: string; className?: string }) {
 
 export default function LabelSheet({
     labels,
-    layout,
     layoutConfig,
     skipped,
     truncated,
     maxLabels,
 }: {
     labels: Label[];
-    layout: string;
     layoutConfig: { label: string; columns: number; kind: string };
     skipped: string[];
     truncated: boolean;

@@ -1,21 +1,120 @@
 @custom-variant dark (&:is(.storefront *));
 
 .storefront {
-    --store-bg: #ffffff;
-    --store-text: #171717;
-    --store-muted: #737373;
-    --store-accent: #2563eb;
-    --store-border: #e5e5e5;
+    --store-bg: #faf7f1;
+    --store-text: #1c1917;
+    --store-muted: #78716c;
+    --store-accent: #dd2e44;
+    --store-accent-strong: #b02336;
+    --store-accent-soft: #fce7ea;
+    --store-accent-ink: #fff7ed;
+    --store-border: #e6ddcf;
     --store-card: #ffffff;
-    --store-card-hover: #f9fafb;
+    --store-card-hover: #f4eee3;
+    --store-input: #ffffff;
+    --store-success: #15803d;
+    --store-success-soft: #f0fdf4;
+    --store-star: #f4900c;
+    --store-hero-from: #1c1917;
+    --store-hero-to: #44403c;
+    --store-radius: 0.5rem;
+    --store-shadow: 0 1px 2px rgb(28 25 23 / 0.06), 0 12px 32px -16px rgb(28 25 23 / 0.28);
+}
+
+@keyframes store-marquee {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+.store-marquee-track {
+    animation: store-marquee 32s linear infinite;
+}
+
+.store-marquee:hover .store-marquee-track {
+    animation-play-state: paused;
+}
+
+@keyframes store-slide-progress {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+.store-slide-progress {
+    transform-origin: left center;
+    animation: store-slide-progress 6s linear forwards;
+}
+
+.store-slide-progress.paused {
+    animation-play-state: paused;
+}
+
+[dir='rtl'] .store-slide-progress {
+    transform-origin: right center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .store-marquee-track,
+    .store-slide-progress {
+        animation: none;
+    }
 }
 
 .storefront.dark {
-    --store-bg: #0a0a0a;
-    --store-text: #f5f5f5;
-    --store-muted: #a3a3a3;
-    --store-accent: #3b82f6;
-    --store-border: #262626;
-    --store-card: #171717;
-    --store-card-hover: #1f1f1f;
+    --store-bg: #141110;
+    --store-text: #f5f0e8;
+    --store-muted: #a8a29e;
+    --store-accent: #f2556a;
+    --store-accent-strong: #ff8a9b;
+    --store-accent-soft: #3a1420;
+    --store-accent-ink: #1c1917;
+    --store-border: #2c2721;
+    --store-card: #1e1a17;
+    --store-card-hover: #292420;
+    --store-input: #1e1a17;
+    --store-success: #4ade80;
+    --store-success-soft: #052e16;
+    --store-star: #ffcc4d;
+    --store-hero-from: #141110;
+    --store-hero-to: #292420;
+    --store-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 16px 40px -16px rgb(0 0 0 / 0.7);
+}
+
+/* Wide shell: full-bleed feel with comfortable gutters. */
+.storefront .store-container {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+    .storefront .store-container {
+        padding-inline: 2rem;
+    }
+}
+
+@media (min-width: 1280px) {
+    .storefront .store-container {
+        padding-inline: 2.5rem;
+    }
+}
+
+/* Editorial display type: warm serif headlines over a system sans body.
+   Falls back per-glyph for Arabic script. */
+.storefront .store-display {
+    font-family: Georgia, 'Times New Roman', 'Noto Naskh Arabic', serif;
+    letter-spacing: -0.01em;
+}
+
+.storefront ::selection {
+    background: var(--store-accent);
+    color: var(--store-accent-ink);
 }

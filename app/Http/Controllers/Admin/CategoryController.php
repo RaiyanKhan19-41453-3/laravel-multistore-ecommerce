@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Support\AdminStoreContext;
+use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,13 +17,15 @@ class CategoryController extends Controller
 {
     public function index(): Response
     {
-        $categories = Category::with('parent')
+        $adminStores = app(AdminStoreContext::class);
+
+        $categories = $adminStores->scope(Category::with('parent'))
             ->withCount('children')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
-        $allCategories = Category::orderBy('name')->get(['id', 'name', 'parent_id']);
+        $allCategories = $adminStores->scope(Category::orderBy('name'))->get(['id', 'name', 'parent_id']);
 
         return Inertia::render('admin/categories/index', [
             'categories' => $categories,
@@ -30,10 +35,13 @@ class CategoryController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+        $adminStores = app(AdminStoreContext::class);
+
         $validated = $request->validate([
-            'parent_id' => 'nullable|exists:categories,id',
+            'parent_id' => ['nullable', $adminStores->existsInStore('categories', $storeId)],
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:categories,slug',
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('categories', 'slug')->where('store_id', $storeId)],
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
@@ -48,10 +56,13 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+        $adminStores = app(AdminStoreContext::class);
+
         $validated = $request->validate([
-            'parent_id' => 'nullable|exists:categories,id',
+            'parent_id' => ['nullable', $adminStores->existsInStore('categories', $adminStores->anchorStoreId($category))],
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:categories,slug,'.$category->id,
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('categories', 'slug')->ignore($category->id)->where('store_id', $storeId)],
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',

@@ -174,7 +174,7 @@ function ZoneForm({ zone, onClose }: { zone?: ShippingZone | null; onClose: () =
 }
 
 function RateForm({ rate, methods, zones, onClose }: { rate?: ShippingRate | null; methods: ShippingMethod[]; zones: ShippingZone[]; onClose: () => void }) {
-    const { data, setData, post, errors, processing } = useForm({
+    const { data, setData, post, processing } = useForm({
         shipping_method_id: rate?.shipping_method_id?.toString() ?? (methods[0]?.id?.toString() ?? ''),
         shipping_zone_id: rate?.shipping_zone_id?.toString() ?? (zones[0]?.id?.toString() ?? ''),
         price: rate?.price?.toString() ?? '',

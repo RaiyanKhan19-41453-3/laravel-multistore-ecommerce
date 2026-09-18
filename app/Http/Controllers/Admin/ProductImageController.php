@@ -7,6 +7,8 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Services\ImageService;
+use App\Support\AdminStoreContext;
+use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,12 +80,15 @@ class ProductImageController extends Controller
         $request->validate([
             'images' => 'required|array|max:10',
             'images.*' => 'required|file|mimes:jpeg,png,webp,gif|max:10240',
-            'product_variant_id' => 'nullable|exists:product_variants,id',
+            'product_variant_id' => ['nullable', app(AdminStoreContext::class)->existsInStore('product_variants', $product->store_id ?? app(CurrentStore::class)->scopeId())],
         ]);
 
         if ($request->product_variant_id) {
             $variant = ProductVariant::findOrFail($request->product_variant_id);
             if ($variant->product_id !== $product->id) {
+                return back()->withErrors(['product_variant_id' => 'Variant does not belong to this product.']);
+            }
+            if ($variant->store_id !== null && $product->store_id !== null && $variant->store_id !== $product->store_id) {
                 return back()->withErrors(['product_variant_id' => 'Variant does not belong to this product.']);
             }
         }

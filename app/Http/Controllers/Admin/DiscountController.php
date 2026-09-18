@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Discount;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Support\AdminStoreContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -68,6 +69,9 @@ class DiscountController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $adminStores = app(AdminStoreContext::class);
+        $targetStoreId = $adminStores->anchorStoreId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|string|in:percentage,fixed',
@@ -86,13 +90,13 @@ class DiscountController extends Controller
             'priority' => 'integer|min:0',
             'stackable' => 'boolean',
             'product_ids' => 'nullable|array',
-            'product_ids.*' => 'exists:products,id',
+            'product_ids.*' => [$adminStores->existsInStore('products', $targetStoreId)],
             'category_ids' => 'nullable|array',
-            'category_ids.*' => 'exists:categories,id',
+            'category_ids.*' => [$adminStores->existsInStore('categories', $targetStoreId)],
             'brand_ids' => 'nullable|array',
-            'brand_ids.*' => 'exists:brands,id',
+            'brand_ids.*' => [$adminStores->existsInStore('brands', $targetStoreId)],
             'variant_ids' => 'nullable|array',
-            'variant_ids.*' => 'exists:product_variants,id',
+            'variant_ids.*' => [$adminStores->existsInStore('product_variants', $targetStoreId)],
         ]);
 
         $productIds = $validated['product_ids'] ?? [];
@@ -131,7 +135,7 @@ class DiscountController extends Controller
 
     public function edit(Discount $discount): Response
     {
-        $discount->load(['products', 'productVariants', 'categories', 'brands']);
+        $discount->load(['products', 'productVariants.product', 'categories', 'brands']);
 
         $products = Product::orderBy('name')->get(['id', 'name', 'sku']);
         $categories = Category::orderBy('name')->get(['id', 'name']);
@@ -149,6 +153,9 @@ class DiscountController extends Controller
 
     public function update(Request $request, Discount $discount): RedirectResponse
     {
+        $adminStores = app(AdminStoreContext::class);
+        $targetStoreId = $adminStores->anchorStoreId($discount);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|string|in:percentage,fixed',
@@ -167,13 +174,13 @@ class DiscountController extends Controller
             'priority' => 'integer|min:0',
             'stackable' => 'boolean',
             'product_ids' => 'nullable|array',
-            'product_ids.*' => 'exists:products,id',
+            'product_ids.*' => [$adminStores->existsInStore('products', $targetStoreId)],
             'category_ids' => 'nullable|array',
-            'category_ids.*' => 'exists:categories,id',
+            'category_ids.*' => [$adminStores->existsInStore('categories', $targetStoreId)],
             'brand_ids' => 'nullable|array',
-            'brand_ids.*' => 'exists:brands,id',
+            'brand_ids.*' => [$adminStores->existsInStore('brands', $targetStoreId)],
             'variant_ids' => 'nullable|array',
-            'variant_ids.*' => 'exists:product_variants,id',
+            'variant_ids.*' => [$adminStores->existsInStore('product_variants', $targetStoreId)],
         ]);
 
         $productIds = $validated['product_ids'] ?? [];

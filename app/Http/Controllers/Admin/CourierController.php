@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Courier;
 use App\Services\Couriers\CourierGatewayFactory;
 use App\Services\Couriers\CourierService;
+use App\Support\CurrentStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,9 +35,11 @@ class CourierController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:100|unique:couriers,code',
+            'code' => ['required', 'string', 'max:100', Rule::unique('couriers', 'code')->where('store_id', $storeId)],
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
         ]);
@@ -47,9 +51,11 @@ class CourierController extends Controller
 
     public function update(Request $request, Courier $courier): RedirectResponse
     {
+        $storeId = app(CurrentStore::class)->scopeId();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:100|unique:couriers,code,'.$courier->id,
+            'code' => ['required', 'string', 'max:100', Rule::unique('couriers', 'code')->ignore($courier->id)->where('store_id', $storeId)],
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
         ]);

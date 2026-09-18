@@ -111,11 +111,10 @@ export default function ProductImages({
                                         {variant.images.length} images
                                     </span>
                                 </div>
-                                <ImageUpload
+                                                                <ImageUpload
                                     productId={product.id}
                                     variantId={variant.id}
                                     images={variant.images}
-                                    label={`Images for ${variant.name}`}
                                 />
                             </div>
                         ))}

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Services\OrderService;
 use App\Services\PaymentGateways\BkashGateway;
+use App\Services\PaymentGateways\MoyasarGateway;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -114,7 +115,7 @@ class PaymentWebhookController extends Controller
             }
 
             if ($payment->isPaid()) {
-                return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_success');
+                return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=bkash_success');
             }
 
             if ($status === 'success') {
@@ -131,10 +132,10 @@ class PaymentWebhookController extends Controller
                         $this->orderService->confirmPayment($payment->order, $payment);
                     }
 
-                    return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_success');
+                    return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=bkash_success');
                 }
 
-                return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_pending');
+                return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=bkash_pending');
             }
 
             if (in_array($status, ['failure', 'cancel'])) {
@@ -144,7 +145,7 @@ class PaymentWebhookController extends Controller
                     $this->orderService->handlePaymentFailure($payment->order);
                 }
 
-                return redirect('/account/orders/'.$payment->order->order_number.'?payment=bkash_'.$status);
+                return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=bkash_'.$status);
             }
 
             return redirect('/checkout?error=bkash_unknown_status');
@@ -152,6 +153,51 @@ class PaymentWebhookController extends Controller
             Log::error('bKash callback error', ['error' => $e->getMessage()]);
 
             return redirect('/checkout?error=bkash_callback_error');
+        }
+    }
+
+    public function handleMoyasarCallback(Request $request): RedirectResponse
+    {
+        $paymentId = $request->query('id');
+
+        if (! $paymentId) {
+            return redirect('/checkout?error=moyasar_missing_params');
+        }
+
+        try {
+            $payment = Payment::where('gateway', 'moyasar')
+                ->where('gateway_transaction_id', $paymentId)
+                ->first();
+
+            if (! $payment) {
+                return redirect('/checkout?error=moyasar_payment_not_found');
+            }
+
+            if ($payment->isPaid()) {
+                return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=moyasar_success');
+            }
+
+            $gateway = new MoyasarGateway;
+            $verified = $gateway->verifyPayment($payment, ['id' => $paymentId]);
+
+            if ($verified) {
+                $payment->update([
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                ]);
+
+                if ($payment->order->status === 'pending') {
+                    $this->orderService->confirmPayment($payment->order, $payment);
+                }
+
+                return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=moyasar_success');
+            }
+
+            return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=moyasar_pending');
+        } catch (\Exception $e) {
+            Log::error('Moyasar callback error', ['error' => $e->getMessage()]);
+
+            return redirect('/checkout?error=moyasar_callback_error');
         }
     }
 }

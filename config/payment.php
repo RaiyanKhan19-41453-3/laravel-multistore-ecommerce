@@ -29,6 +29,9 @@ return [
         'bkash' => 15,
         'nagad' => 15,
         'rocket' => 15,
+        'moyasar' => 20,
+        'tabby' => 30,
+        'stripe' => 30,
         'card' => 20,
         'cod' => null, // COD never expires
     ],
@@ -46,6 +49,9 @@ return [
         'bkash' => env('PAYMENT_BKASH_ENABLED', false),
         'nagad' => env('PAYMENT_NAGAD_ENABLED', false),
         'rocket' => env('PAYMENT_ROCKET_ENABLED', false),
+        'moyasar' => env('PAYMENT_MOYASAR_ENABLED', false),
+        'tabby' => env('PAYMENT_TABBY_ENABLED', false),
+        'stripe' => env('PAYMENT_STRIPE_ENABLED', false),
     ],
 
     /*
@@ -65,6 +71,23 @@ return [
             'username' => env('BKASH_USERNAME'),
             'password' => env('BKASH_PASSWORD'),
             'sandbox' => env('BKASH_SANDBOX', true),
+        ],
+        'moyasar' => [
+            'api_key' => env('MOYASAR_API_KEY'),
+            'publishable_key' => env('MOYASAR_PUBLISHABLE_KEY'),
+            'base_url' => env('MOYASAR_BASE_URL', 'https://api.moyasar.com'),
+        ],
+        'tabby' => [
+            'public_key' => env('TABBY_PUBLIC_KEY'),
+            'secret_key' => env('TABBY_SECRET_KEY'),
+            'merchant_code' => env('TABBY_MERCHANT_CODE'),
+            'base_url' => env('TABBY_BASE_URL', 'https://api.tabby.ai'),
+        ],
+        'stripe' => [
+            'secret_key' => env('STRIPE_SECRET_KEY'),
+            'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
+            'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+            'base_url' => env('STRIPE_BASE_URL', 'https://api.stripe.com'),
         ],
     ],
 ];

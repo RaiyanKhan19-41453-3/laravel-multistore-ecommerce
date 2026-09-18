@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Store;
 use App\Models\ZatcaDevice;
+use App\Services\TaxService;
 use App\Services\Zatca\FatooraClient;
 use Illuminate\Console\Command;
 
@@ -17,6 +19,7 @@ class ZatcaOnboard extends Command
 {
     protected $signature = 'zatca:onboard
         {--serial= : Device serial (defaults to ZATCA_DEVICE_SERIAL)}
+        {--store= : Store slug to own this device (per-store EGS unit)}
         {--show-csr : Print the CSR and stop before requesting OTP}';
 
     protected $description = 'Onboard this EGS unit with ZATCA Fatoora (compliance + production CSID)';
@@ -31,11 +34,29 @@ class ZatcaOnboard extends Command
             return self::FAILURE;
         }
 
+        $storeId = null;
+
+        if ($slug = $this->option('store')) {
+            $store = Store::where('slug', $slug)->first();
+
+            if (! $store) {
+                $this->error("Store [{$slug}] not found.");
+
+                return self::FAILURE;
+            }
+
+            $storeId = $store->id;
+        }
+
         $device = ZatcaDevice::firstOrNew(['serial' => $serial]);
+
+        if ($storeId !== null) {
+            $device->store_id = $storeId;
+        }
 
         if (! $device->private_key) {
             $this->info('Generating secp256k1 keypair and CSR...');
-            [$privateKey, $csr] = $this->generateCsr($serial);
+            [$privateKey, $csr] = $this->generateCsr($serial, $storeId);
             $device->private_key = $privateKey;
             $device->csr = $csr;
             $device->save();
@@ -79,7 +100,7 @@ class ZatcaOnboard extends Command
     /**
      * @return array{0: string, 1: string} [privateKeyPem, csrPem]
      */
-    protected function generateCsr(string $serial): array
+    protected function generateCsr(string $serial, ?int $storeId = null): array
     {
         $key = openssl_pkey_new([
             'curve_name' => 'secp256k1',
@@ -92,7 +113,7 @@ class ZatcaOnboard extends Command
 
         openssl_pkey_export($key, $privatePem);
 
-        $seller = config('zatca.seller', []);
+        $seller = app(TaxService::class)->sellerProfile($storeId);
 
         $dn = array_filter([
             'countryName' => $seller['country'] ?? 'SA',
