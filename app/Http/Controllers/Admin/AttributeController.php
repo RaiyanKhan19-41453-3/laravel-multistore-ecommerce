@@ -53,7 +53,7 @@ class AttributeController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => ['nullable', 'string', 'max:255', Rule::unique('attributes', 'slug')->ignore($attribute->id)->where('store_id', $storeId)],
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('attributes', 'slug')->ignore($attribute->id)->where('store_id', $attribute->store_id ?? $storeId)],
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
         ]);
@@ -91,7 +91,14 @@ class AttributeController extends Controller
         $validated['attribute_id'] = $attribute->id;
         $validated['slug'] = Str::slug($validated['slug'] ?? $validated['value']);
 
-        AttributeValue::create($validated);
+        $value = AttributeValue::create($validated);
+
+        // Values live on their attribute's store, even when the request
+        // resolved elsewhere (same fixup as coupons and variants).
+        if ($attribute->store_id !== null && $value->store_id !== $attribute->store_id) {
+            $value->store_id = $attribute->store_id;
+            $value->save();
+        }
 
         return to_route('admin.attributes.index');
     }

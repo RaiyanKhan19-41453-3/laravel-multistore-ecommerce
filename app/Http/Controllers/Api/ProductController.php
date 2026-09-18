@@ -86,11 +86,12 @@ class ProductController extends Controller
             ],
         ]);
 
-        $bestDiscount = null;
-        if ($product->discounts->isNotEmpty()) {
-            $bestDiscountId = $product->discounts->sortByDesc('priority')->first()->id;
-            $bestDiscount = $product->discounts->firstWhere('id', $bestDiscountId);
-        }
+        // Advertise only discounts checkout could actually grant (same
+        // active/date bar the variant block below uses).
+        $bestDiscount = $product->discounts
+            ->filter(fn ($discount) => $discount->isActiveNow())
+            ->sortByDesc('priority')
+            ->first();
 
         $reviewSummary = [
             'total' => Review::approved()->where('product_id', $product->id)->count(),

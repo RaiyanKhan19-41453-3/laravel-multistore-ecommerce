@@ -6,6 +6,9 @@ paths:
   - app/Services/InventoryService.php
   - app/Services/CatalogService.php
   - app/Services/ImageService.php
+  - app/Services/SettingsService.php
+  - app/Services/DiscountService.php
+  - app/Services/PaymentService.php
 ---
 
 # Services
@@ -27,3 +30,15 @@ Storefront listing logic lives in CatalogService::paginate (filters, sort, forma
 
 ## Use withoutGlobalScope for cross-store lookups
 When a service needs to read a model's store_id regardless of the current store context (e.g., ImageService reading Product.store_id for file paths), use `Model::withoutGlobalScope(BelongsToStore::class)->whereKey(...)` to bypass the scope. The global scope would otherwise filter out the record if CurrentStore differs from the model's store.
+
+## Fulfillment status moves use markShipped/markDelivered
+Fulfillment moves go through markShipped/markDelivered (machine-checked, idempotent, with notifications), never direct status writes. Allowed from confirmed/processing/shipped only; pending, cancelled, expired, completed throw. Admin shipment updates and both courier webhooks use them and convert InvalidArgumentException to errors/logs instead of 500s.
+
+## Settings reads bypass ambient store scope
+SettingsService reads bypass the BelongsToStore scope (explicit store wins over ambient context) so NULL-store globals stay visible on every storefront request. Cache keys are versioned (v2); bump the version if the merge logic changes again since entries are rememberForever.
+
+## Mixed discount targets are a union
+Mixed product+variant discount targets are a UNION: a line qualifies through either side, in both getEligibleSubtotal and getPerItemDiscountAmounts (items path). getTargeting still reports product-first for display only; never use its masked variant_ids to decide eligibility.
+
+## tran_id webhook fallback is sslcommerz-only
+The tran_id-as-payment-id webhook fallback is sslcommerz-only (its gateway id IS our payment id). For every other gateway tran_id is untrusted input and must not resolve payments, especially since failed/cancelled statuses skip server verification.

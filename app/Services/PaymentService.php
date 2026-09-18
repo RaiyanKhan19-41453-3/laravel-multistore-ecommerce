@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Scopes\BelongsToStore;
 use App\Services\PaymentGateways\PaymentGateway;
 use App\Services\PaymentGateways\PaymentGatewayFactory;
 use Illuminate\Http\Client\ConnectionException;
@@ -64,15 +65,24 @@ class PaymentService
             return null;
         }
 
-        $payment = Payment::where('gateway', $gateway->getName())
+        // Gateway transaction ids are globally unique: never scope this
+        // lookup to the resolved store, or webhooks for other stores'
+        // payments resolve to nothing and orders never confirm.
+        $payment = Payment::withoutGlobalScope(BelongsToStore::class)
+            ->where('gateway', $gateway->getName())
             ->where('gateway_transaction_id', $gatewayTransactionId)
             ->first();
 
         if (! $payment) {
             $paymentId = $payload['tran_id'] ?? null;
 
-            if ($paymentId) {
-                $payment = Payment::where('id', $paymentId)
+            // tran_id-as-payment-id is an sslcommerz-only convention (its
+            // gateway_transaction_id IS our payment id). For every other
+            // gateway tran_id is attacker-controlled input: resolving on it
+            // would let anyone cancel anyone's payment without verification.
+            if ($paymentId && $gateway->getName() === 'sslcommerz') {
+                $payment = Payment::withoutGlobalScope(BelongsToStore::class)
+                    ->where('id', $paymentId)
                     ->where('gateway', $gateway->getName())
                     ->first();
             }
@@ -116,6 +126,15 @@ class PaymentService
         }
 
         $gateway = $this->resolveGateway($payment->gateway);
+
+        if (! $gateway) {
+            Log::warning('Refund skipped: no gateway implementation', [
+                'payment_id' => $payment->id,
+                'gateway' => $payment->gateway,
+            ]);
+
+            return false;
+        }
 
         $result = $gateway->refund($payment, $amount);
 

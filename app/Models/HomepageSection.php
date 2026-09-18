@@ -11,7 +11,7 @@ class HomepageSection extends Model
 {
     use HasFactory;
 
-    public const KEYS = ['hero', 'brands', 'categories', 'featured', 'top_rated', 'spotlight', 'banners', 'perks'];
+    public const KEYS = ['hero', 'brands', 'categories', 'featured', 'sale', 'new_arrivals', 'top_rated', 'spotlight', 'banners', 'perks'];
 
     protected $fillable = [
         'store_id',

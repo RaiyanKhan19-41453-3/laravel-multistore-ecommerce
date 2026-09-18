@@ -37,12 +37,14 @@ class ShippingController extends Controller
     {
         $request->validate([
             'city' => 'required|string|max:100',
+            'country' => 'nullable|string|max:100',
             'subtotal' => 'required|numeric|min:0',
         ]);
 
         $rates = $this->shippingService->getAvailableRates(
             $request->input('city'),
             (float) $request->input('subtotal'),
+            $request->input('country', 'Bangladesh'),
         );
 
         return response()->json([

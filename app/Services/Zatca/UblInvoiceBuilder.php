@@ -145,14 +145,24 @@ class UblInvoiceBuilder
     ): string {
         $subtotal = 0.0;
         $vatTotal = 0.0;
+        $taxableBase = 0.0;
+        $exemptBase = 0.0;
 
         foreach ($lines as $line) {
             $subtotal += $line['line_total'];
             $vatTotal += $line['vat_amount'];
+
+            if (! empty($line['exempt'])) {
+                $exemptBase += $line['line_total'];
+            } else {
+                $taxableBase += $line['line_total'];
+            }
         }
 
         $subtotal = round($subtotal, 2);
         $vatTotal = round($vatTotal, 2);
+        $taxableBase = round($taxableBase, 2);
+        $exemptBase = round($exemptBase, 2);
         $payable = round($subtotal + $vatTotal, 2);
 
         $doc = new DOMDocument('1.0', 'UTF-8');
@@ -198,19 +208,41 @@ class UblInvoiceBuilder
         $invoice->appendChild($taxTotal);
         $this->amount($doc, $taxTotal, 'cbc:TaxAmount', $vatTotal);
 
-        $subtotalNode = $doc->createElement('cac:TaxSubtotal');
-        $taxTotal->appendChild($subtotalNode);
-        $this->amount($doc, $subtotalNode, 'cbc:TaxableAmount', $subtotal);
-        $this->amount($doc, $subtotalNode, 'cbc:TaxAmount', $vatTotal);
+        // Standard-rated and exempt bases get their own subtotals: lumping
+        // exempt lines under S misstates the taxable amount and Fatoora
+        // rejects the implied rate. Pure-taxable invoices keep the exact
+        // previous shape (single S subtotal).
+        if ($taxableBase > 0 || $exemptBase <= 0) {
+            $subtotalNode = $doc->createElement('cac:TaxSubtotal');
+            $taxTotal->appendChild($subtotalNode);
+            $this->amount($doc, $subtotalNode, 'cbc:TaxableAmount', $taxableBase > 0 ? $taxableBase : $subtotal);
+            $this->amount($doc, $subtotalNode, 'cbc:TaxAmount', $vatTotal);
 
-        $category = $doc->createElement('cac:TaxCategory');
-        $subtotalNode->appendChild($category);
-        $this->text($doc, $category, 'cbc:ID', 'S');
-        $this->text($doc, $category, 'cbc:Percent', number_format((float) config('zatca.vat_rate', 15.0), 2, '.', ''));
+            $category = $doc->createElement('cac:TaxCategory');
+            $subtotalNode->appendChild($category);
+            $this->text($doc, $category, 'cbc:ID', 'S');
+            $this->text($doc, $category, 'cbc:Percent', number_format((float) config('zatca.vat_rate', 15.0), 2, '.', ''));
 
-        $scheme = $doc->createElement('cac:TaxScheme');
-        $category->appendChild($scheme);
-        $this->text($doc, $scheme, 'cbc:ID', 'VAT');
+            $scheme = $doc->createElement('cac:TaxScheme');
+            $category->appendChild($scheme);
+            $this->text($doc, $scheme, 'cbc:ID', 'VAT');
+        }
+
+        if ($exemptBase > 0) {
+            $exemptNode = $doc->createElement('cac:TaxSubtotal');
+            $taxTotal->appendChild($exemptNode);
+            $this->amount($doc, $exemptNode, 'cbc:TaxableAmount', $exemptBase);
+            $this->amount($doc, $exemptNode, 'cbc:TaxAmount', 0.0);
+
+            $exemptCategory = $doc->createElement('cac:TaxCategory');
+            $exemptNode->appendChild($exemptCategory);
+            $this->text($doc, $exemptCategory, 'cbc:ID', 'E');
+            $this->text($doc, $exemptCategory, 'cbc:Percent', '0.00');
+
+            $exemptScheme = $doc->createElement('cac:TaxScheme');
+            $exemptCategory->appendChild($exemptScheme);
+            $this->text($doc, $exemptScheme, 'cbc:ID', 'VAT');
+        }
 
         $legal = $doc->createElement('cac:LegalMonetaryTotal');
         $invoice->appendChild($legal);
@@ -289,8 +321,8 @@ class UblInvoiceBuilder
 
         $classified = $doc->createElement('cac:ClassifiedTaxCategory');
         $item->appendChild($classified);
-        $this->text($doc, $classified, 'cbc:ID', 'S');
-        $this->text($doc, $classified, 'cbc:Percent', number_format((float) $line['vat_rate'], 2, '.', ''));
+        $this->text($doc, $classified, 'cbc:ID', ! empty($line['exempt']) ? 'E' : 'S');
+        $this->text($doc, $classified, 'cbc:Percent', ! empty($line['exempt']) ? '0.00' : number_format((float) $line['vat_rate'], 2, '.', ''));
 
         $scheme = $doc->createElement('cac:TaxScheme');
         $classified->appendChild($scheme);

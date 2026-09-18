@@ -67,6 +67,8 @@ const LABELS: Record<string, string> = {
     brands: 'Brand marquee',
     categories: 'Category index',
     featured: 'Featured products',
+    sale: 'On sale',
+    new_arrivals: 'New arrivals',
     top_rated: 'Top rated',
     spotlight: 'Spotlight deal',
     banners: 'Banners',

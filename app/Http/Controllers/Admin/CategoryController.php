@@ -62,7 +62,7 @@ class CategoryController extends Controller
         $validated = $request->validate([
             'parent_id' => ['nullable', $adminStores->existsInStore('categories', $adminStores->anchorStoreId($category))],
             'name' => 'required|string|max:255',
-            'slug' => ['nullable', 'string', 'max:255', Rule::unique('categories', 'slug')->ignore($category->id)->where('store_id', $storeId)],
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('categories', 'slug')->ignore($category->id)->where('store_id', $adminStores->anchorStoreId($category))],
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',

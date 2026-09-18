@@ -1,22 +1,22 @@
 @custom-variant dark (&:is(.storefront *));
 
 .storefront {
-    --store-bg: #faf7f1;
-    --store-text: #1c1917;
-    --store-muted: #78716c;
-    --store-accent: #dd2e44;
-    --store-accent-strong: #b02336;
-    --store-accent-soft: #fce7ea;
-    --store-accent-ink: #fff7ed;
-    --store-border: #e6ddcf;
+    --store-bg: #f7faf8;
+    --store-text: #14201a;
+    --store-muted: #67756d;
+    --store-accent: #006a4e;
+    --store-accent-strong: #004d38;
+    --store-accent-soft: #dff0e7;
+    --store-accent-ink: #f2fbf6;
+    --store-border: #dde8e1;
     --store-card: #ffffff;
-    --store-card-hover: #f4eee3;
+    --store-card-hover: #eef5f0;
     --store-input: #ffffff;
     --store-success: #15803d;
     --store-success-soft: #f0fdf4;
     --store-star: #f4900c;
-    --store-hero-from: #1c1917;
-    --store-hero-to: #44403c;
+    --store-hero-from: #0c1f16;
+    --store-hero-to: #16402e;
     --store-radius: 0.5rem;
     --store-shadow: 0 1px 2px rgb(28 25 23 / 0.06), 0 12px 32px -16px rgb(28 25 23 / 0.28);
 }
@@ -38,43 +38,20 @@
     animation-play-state: paused;
 }
 
-@keyframes store-slide-progress {
-    from {
-        transform: scaleX(0);
-    }
-    to {
-        transform: scaleX(1);
-    }
-}
-
-.store-slide-progress {
-    transform-origin: left center;
-    animation: store-slide-progress 6s linear forwards;
-}
-
-.store-slide-progress.paused {
-    animation-play-state: paused;
-}
-
-[dir='rtl'] .store-slide-progress {
-    transform-origin: right center;
-}
-
 @media (prefers-reduced-motion: reduce) {
-    .store-marquee-track,
-    .store-slide-progress {
+    .store-marquee-track {
         animation: none;
     }
 }
 
 .storefront.dark {
-    --store-bg: #141110;
-    --store-text: #f5f0e8;
-    --store-muted: #a8a29e;
-    --store-accent: #f2556a;
-    --store-accent-strong: #ff8a9b;
-    --store-accent-soft: #3a1420;
-    --store-accent-ink: #1c1917;
+    --store-bg: #0e1512;
+    --store-text: #f0f7f3;
+    --store-muted: #9db3a8;
+    --store-accent: #34d399;
+    --store-accent-strong: #6ee7b7;
+    --store-accent-soft: #0b2e22;
+    --store-accent-ink: #052e1f;
     --store-border: #2c2721;
     --store-card: #1e1a17;
     --store-card-hover: #292420;

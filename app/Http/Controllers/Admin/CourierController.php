@@ -55,7 +55,7 @@ class CourierController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => ['required', 'string', 'max:100', Rule::unique('couriers', 'code')->ignore($courier->id)->where('store_id', $storeId)],
+            'code' => ['required', 'string', 'max:100', Rule::unique('couriers', 'code')->ignore($courier->id)->where('store_id', $courier->store_id ?? $storeId)],
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
         ]);

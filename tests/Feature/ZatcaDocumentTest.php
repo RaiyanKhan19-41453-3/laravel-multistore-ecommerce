@@ -1,11 +1,15 @@
 <?php
 
+use App\Jobs\SubmitZatcaDocument;
+use App\Models\Category;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\User;
 use App\Services\Zatca\UblInvoiceBuilder;
 use App\Services\Zatca\ZatcaDocumentService;
 use App\Services\Zatca\ZatcaSigner;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 function zatcaSeller(): array
 {
@@ -238,4 +242,222 @@ it('scopes hash chains per device', function () {
     expect($docB->device_serial)->toBe('EGS-B');
     expect($docB->previous_invoice_hash)->toBe(ZatcaDocumentService::GENESIS_HASH);
     expect($service->previousHash('EGS-A'))->toBe($signedA->invoice_hash);
+});
+
+function zatcaAmounts(string $xml): array
+{
+    preg_match('/<cbc:PayableAmount currencyID="SAR">([\d.]+)<\//', $xml, $payable);
+    preg_match('/<cac:TaxTotal>.*?<cbc:TaxAmount currencyID="SAR">([\d.]+)<\//s', $xml, $tax);
+    preg_match_all('/<cac:InvoiceLine>(.*?)<\/cac:InvoiceLine>/s', $xml, $blocks);
+
+    $lines = [];
+    $rates = [];
+    $names = [];
+
+    foreach ($blocks[1] as $block) {
+        preg_match('/<cbc:LineExtensionAmount currencyID="SAR">([\d.]+)<\//', $block, $amount);
+        preg_match('/<cbc:Percent>([\d.]+)<\//', $block, $rate);
+        preg_match('/<cbc:Name>(.*?)<\/cbc:Name>/', $block, $name);
+        $lines[] = $amount[1];
+        $rates[] = $rate[1];
+        $names[] = html_entity_decode($name[1]);
+    }
+
+    return [
+        'payable' => $payable[1] ?? null,
+        'tax' => $tax[1] ?? null,
+        'lines' => $lines,
+        'rates' => $rates,
+        'names' => $names,
+    ];
+}
+
+function zatcaDiscountedOrder(): Order
+{
+    config([
+        'zatca.enabled' => true,
+        'zatca.seller.name_ar' => 'شركة المثال',
+        'zatca.seller.vat_number' => '300012345600003',
+    ]);
+
+    $user = User::factory()->create();
+    $order = Order::factory()->for($user)->create([
+        'status' => 'confirmed',
+        'subtotal' => 1000,
+        'discount_total' => 100,
+        'shipping_cost' => 60,
+        'tax_amount' => 135,
+        'total' => 1095,
+        'shipping_name' => 'Buyer Name',
+        'shipping_phone' => '0512345678',
+        'shipping_address' => 'Olaya St 5',
+        'shipping_city' => 'Riyadh',
+        'shipping_country' => 'SA',
+    ]);
+    OrderItem::factory()->for($order)->create([
+        'name' => 'Widget A',
+        'sku' => 'WDG-A',
+        'unit_price' => 300,
+        'quantity' => 2,
+        'subtotal' => 600,
+        'total' => 600,
+    ]);
+    OrderItem::factory()->for($order)->create([
+        'name' => 'Widget B',
+        'sku' => 'WDG-B',
+        'unit_price' => 400,
+        'quantity' => 1,
+        'subtotal' => 400,
+        'total' => 400,
+    ]);
+
+    return $order->fresh();
+}
+
+it('invoices the discounted total including delivery, reconciling with the order', function () {
+    $doc = app(ZatcaDocumentService::class)->buildForOrder(zatcaDiscountedOrder(), 'simplified');
+    $amounts = zatcaAmounts($doc->xml);
+
+    // Lines: 540 + 360 discounted goods plus the 60 delivery line.
+    expect($amounts['names'])->toBe(['Widget A', 'Widget B', 'Delivery']);
+    expect(array_map('floatval', $amounts['lines']))->toBe([540.0, 360.0, 60.0]);
+    expect($amounts['tax'])->toBe('135.00');
+    // Payable matches exactly what the customer was charged (and the QR).
+    expect($amounts['payable'])->toBe('1095.00');
+});
+
+it('leaves exempt lines untaxed instead of spreading VAT onto them', function () {
+    config([
+        'zatca.enabled' => true,
+        'zatca.seller.name_ar' => 'شركة المثال',
+        'zatca.seller.vat_number' => '300012345600003',
+        'zatca.exempt_category_slugs' => ['meds'],
+    ]);
+
+    $user = User::factory()->create();
+    $order = Order::factory()->for($user)->create([
+        'status' => 'confirmed',
+        'subtotal' => 1000,
+        'discount_total' => 0,
+        'shipping_cost' => 0,
+        'tax_amount' => 75,
+        'total' => 1075,
+        'shipping_name' => 'Buyer Name',
+        'shipping_phone' => '0512345678',
+        'shipping_address' => 'Olaya St 5',
+        'shipping_city' => 'Riyadh',
+        'shipping_country' => 'SA',
+    ]);
+
+    $medicine = Product::factory()->create(['price' => 500, 'is_active' => true]);
+    $category = Category::create(['name' => 'Meds', 'slug' => 'meds', 'is_active' => true]);
+    $medicine->categories()->attach($category);
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $medicine->id,
+        'name' => 'Medicine',
+        'sku' => 'MED-1',
+        'unit_price' => 500,
+        'quantity' => 1,
+        'subtotal' => 500,
+        'total' => 500,
+    ]);
+    OrderItem::factory()->for($order)->create([
+        'name' => 'Widget',
+        'sku' => 'WDG-1',
+        'unit_price' => 500,
+        'quantity' => 1,
+        'subtotal' => 500,
+        'total' => 500,
+    ]);
+
+    $doc = app(ZatcaDocumentService::class)->buildForOrder($order->fresh(), 'simplified');
+    $amounts = zatcaAmounts($doc->xml);
+
+    expect($amounts['names'])->toBe(['Medicine', 'Widget']);
+    expect($amounts['rates'])->toBe(['0.00', '15.00']);
+    expect($amounts['tax'])->toBe('75.00');
+    expect($amounts['payable'])->toBe('1075.00');
+});
+
+it('splits taxable and exempt bases into separate tax subtotals', function () {
+    config([
+        'zatca.enabled' => true,
+        'zatca.seller.name_ar' => 'شركة المثال',
+        'zatca.seller.vat_number' => '300012345600003',
+        'zatca.exempt_category_slugs' => ['meds'],
+    ]);
+
+    $user = User::factory()->create();
+    $order = Order::factory()->for($user)->create([
+        'status' => 'confirmed',
+        'subtotal' => 1000,
+        'discount_total' => 0,
+        'shipping_cost' => 0,
+        'tax_amount' => 75,
+        'total' => 1075,
+        'shipping_name' => 'Buyer Name',
+        'shipping_phone' => '0512345678',
+        'shipping_address' => 'Olaya St 5',
+        'shipping_city' => 'Riyadh',
+        'shipping_country' => 'SA',
+    ]);
+
+    $medicine = Product::factory()->create(['price' => 500, 'is_active' => true]);
+    $category = Category::create(['name' => 'Meds', 'slug' => 'meds', 'is_active' => true]);
+    $medicine->categories()->attach($category);
+    OrderItem::factory()->for($order)->create([
+        'product_id' => $medicine->id,
+        'name' => 'Medicine',
+        'sku' => 'MED-1',
+        'unit_price' => 500,
+        'quantity' => 1,
+        'subtotal' => 500,
+        'total' => 500,
+    ]);
+    OrderItem::factory()->for($order)->create([
+        'name' => 'Widget',
+        'sku' => 'WDG-1',
+        'unit_price' => 500,
+        'quantity' => 1,
+        'subtotal' => 500,
+        'total' => 500,
+    ]);
+
+    $xml = app(ZatcaDocumentService::class)->buildForOrder($order->fresh(), 'simplified')->xml;
+
+    // Two subtotals (S 500 + E 500), never one S lumped at 1000.
+    expect(substr_count($xml, '<cac:TaxSubtotal>'))->toBe(2);
+    expect(substr_count($xml, '<cbc:TaxableAmount currencyID="SAR">500.00</cbc:TaxableAmount>'))->toBe(2);
+    expect($xml)->not->toContain('<cbc:TaxableAmount currencyID="SAR">1000.00</cbc:TaxableAmount>');
+    expect($xml)->toContain('<cbc:ID>E</cbc:ID>');
+    expect($xml)->toContain('<cbc:PayableAmount currencyID="SAR">1075.00</cbc:PayableAmount>');
+});
+
+it('serializes zatca submissions per device without dropping documents', function () {
+    config([
+        'zatca.enabled' => true,
+        'zatca.seller.name_ar' => 'شركة المثال',
+        'zatca.seller.vat_number' => '300012345600003',
+    ]);
+
+    $service = app(ZatcaDocumentService::class);
+
+    config(['zatca.device.serial' => 'EGS-A']);
+    $docA1 = $service->buildForOrder(zatcaOrder(), 'simplified');
+    $docA2 = $service->buildForOrder(zatcaOrder(), 'simplified');
+
+    config(['zatca.device.serial' => 'EGS-B']);
+    $docB = $service->buildForOrder(zatcaOrder(), 'simplified');
+
+    $middlewareFor = fn (int $documentId): WithoutOverlapping => (new SubmitZatcaDocument($documentId))->middleware()[0];
+
+    $lockA1 = $middlewareFor($docA1->id);
+    $lockA2 = $middlewareFor($docA2->id);
+    $lockB = $middlewareFor($docB->id);
+    $lockMissing = $middlewareFor(999999);
+
+    expect($lockA1)->toBeInstanceOf(WithoutOverlapping::class);
+    expect($lockA1->key)->toBe($lockA2->key);
+    expect($lockB->key)->not->toBe($lockA1->key);
+    expect($lockMissing->key)->toContain('default');
 });

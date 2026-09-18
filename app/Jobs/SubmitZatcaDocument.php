@@ -8,6 +8,7 @@ use App\Services\Zatca\FatooraClient;
 use App\Services\Zatca\ZatcaDocumentService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Log;
 
 class SubmitZatcaDocument implements ShouldQueue
@@ -17,6 +18,21 @@ class SubmitZatcaDocument implements ShouldQueue
     public function __construct(
         public int $documentId,
     ) {}
+
+    /**
+     * Serialize submissions per device: Fatoora validates every document
+     * against the current chain head, so overlapping submissions for the
+     * same device can only corrupt the chain. Unlike ShouldBeUnique this
+     * queues distinct documents instead of dropping them.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        $serial = ZatcaDocument::whereKey($this->documentId)->value('device_serial');
+
+        return [new WithoutOverlapping('zatca-device-'.($serial ?: 'default'), releaseAfter: 30, expiresAfter: 600)];
+    }
 
     public function tries(): int
     {

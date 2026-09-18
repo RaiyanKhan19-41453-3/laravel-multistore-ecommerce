@@ -25,11 +25,27 @@ class ResolveCart
             $cart = $this->cartService->getOrCreateForUser($bearerUser, $storeId);
         } elseif ($request->hasHeader('X-Guest-Token')) {
             $guestToken = $request->header('X-Guest-Token');
+
+            if (! $this->validGuestToken($guestToken)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid guest token.',
+                ], 400);
+            }
+
             $cart = $this->cartService->getOrCreateForGuest($guestToken, $storeId);
         } elseif ($request->user()) {
             $cart = $this->cartService->getOrCreateForUser($request->user(), $storeId);
         } elseif ($request->cookie('store_guest_token')) {
             $guestToken = $request->cookie('store_guest_token');
+
+            if (! $this->validGuestToken($guestToken)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid guest token.',
+                ], 400);
+            }
+
             $cart = $this->cartService->getOrCreateForGuest($guestToken, $storeId);
         } else {
             $guestToken = Str::uuid()->toString();
@@ -47,6 +63,16 @@ class ResolveCart
         }
 
         return $response;
+    }
+
+    /**
+     * Guest tokens go straight into a varchar(36) lookup: reject anything
+     * that cannot fit instead of 500ing on insert. Length-checked only
+     * (not UUID-strict) so existing client tokens keep working.
+     */
+    private function validGuestToken(mixed $token): bool
+    {
+        return is_string($token) && $token !== '' && strlen($token) <= 36;
     }
 
     private function resolveBearerUser(Request $request): ?User

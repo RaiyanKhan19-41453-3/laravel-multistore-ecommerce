@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Wishlist;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -80,10 +81,24 @@ class WishlistController extends Controller
             ]);
         }
 
-        Wishlist::create([
-            'user_id' => $request->user()->id,
-            'product_id' => $product->id,
-        ]);
+        // Same race as reviews: concurrent toggles can both pass the
+        // check, and the loser's insert hits the unique index. Re-read
+        // the true state instead of 500ing.
+        try {
+            Wishlist::create([
+                'user_id' => $request->user()->id,
+                'product_id' => $product->id,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            $wishlisted = Wishlist::where('user_id', $request->user()->id)
+                ->where('product_id', $product->id)
+                ->exists();
+
+            return response()->json([
+                'success' => true,
+                'data' => ['wishlisted' => $wishlisted],
+            ]);
+        }
 
         return response()->json([
             'success' => true,

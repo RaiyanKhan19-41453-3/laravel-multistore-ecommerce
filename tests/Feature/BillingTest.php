@@ -1,7 +1,10 @@
 <?php
 
+use App\Models\Courier;
+use App\Models\Order;
 use App\Models\Plan;
 use App\Models\Product;
+use App\Models\Shipment;
 use App\Models\Store;
 use App\Models\Subscription;
 
@@ -132,4 +135,40 @@ it('blocks suspended stores when enforcement is on, and nobody when off', functi
     $store->users()->attach($owner->id, ['role' => 'owner']);
     $this->actingAs($owner)->get('/admin/products', ['X-Store-Slug' => 'enf-a'])->assertStatus(402);
     $this->actingAs($owner)->getJson('/admin/billing', ['X-Store-Slug' => 'enf-a'])->assertOk();
+});
+
+it('lets courier webhooks through when enforcement is on, whatever the default store owes', function () {
+    $storeA = Store::factory()->create([
+        'slug' => 'wh-a',
+        'created_at' => now()->subDays(60),
+        'updated_at' => now()->subDays(60),
+    ]);
+    $storeB = Store::factory()->create(['slug' => 'wh-b']);
+
+    // Expire the migration-seeded default store too: with enforcement on,
+    // resolution falls back to it, and webhooks must still get through.
+    Store::default()?->update(['created_at' => now()->subDays(60), 'updated_at' => now()->subDays(60)]);
+
+    $courier = Courier::factory()->create(['code' => 'pathao', 'store_id' => $storeB->id]);
+    $order = Order::factory()->create(['status' => 'shipped', 'store_id' => $storeB->id]);
+    $shipment = Shipment::factory()->create([
+        'order_id' => $order->id,
+        'courier_id' => $courier->id,
+        'courier_order_id' => 'PATHAO-WH',
+        'status' => 'in_transit',
+        'store_id' => $storeB->id,
+    ]);
+
+    config(['platform.billing.enforced' => true]);
+
+    // No store header: resolution falls back to the expired default store.
+    // Webhooks carry their own identity and must never be gated on it, and
+    // their lookups must see rows from every store.
+    $this->postJson('/api/webhooks/pathao', [
+        'event' => 'order.delivered',
+        'data' => ['consignment_id' => 'PATHAO-WH', 'store_id' => 12345],
+    ])->assertOk()->assertJson(['status' => 'processed']);
+
+    expect($order->fresh()->status)->toBe('delivered');
+    expect($storeA->billingStatus())->toBe('expired');
 });

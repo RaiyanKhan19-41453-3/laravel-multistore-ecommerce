@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory;
 use App\Services\InventoryService;
+use App\Support\AdminStoreContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,11 @@ class InventoryController extends Controller
 
     public function index(Request $request): Response
     {
-        $query = Inventory::with(['product', 'productVariant']);
+        // Staff locked to a store see only that store; the platform-wide
+        // view keeps the global listing. scope() is a no-op without a
+        // selection, so both paths share one query.
+        $adminStores = app(AdminStoreContext::class);
+        $query = $adminStores->scope(Inventory::with(['product', 'productVariant']));
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -63,11 +68,13 @@ class InventoryController extends Controller
             'is_low_stock' => $inv->quantity > 0 && $inv->quantity <= 5,
         ]);
 
+        $statsQuery = $adminStores->scope(Inventory::query());
+
         $stats = [
-            'total_products' => Inventory::count(),
-            'total_stock' => Inventory::sum('quantity'),
-            'low_stock' => Inventory::where('quantity', '>', 0)->where('quantity', '<=', 5)->count(),
-            'out_of_stock' => Inventory::where('quantity', '<=', 0)->count(),
+            'total_products' => (clone $statsQuery)->count(),
+            'total_stock' => (clone $statsQuery)->sum('quantity'),
+            'low_stock' => (clone $statsQuery)->where('quantity', '>', 0)->where('quantity', '<=', 5)->count(),
+            'out_of_stock' => (clone $statsQuery)->where('quantity', '<=', 0)->count(),
         ];
 
         return Inertia::render('admin/inventory/index', [

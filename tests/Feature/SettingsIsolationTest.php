@@ -81,3 +81,27 @@ it('writes admin settings to the resolved store only', function () {
     app(CurrentStore::class)->forget();
     expect(app(SettingsService::class)->get('store.currency'))->toBeNull();
 });
+
+it('falls back to global settings while a store is resolved', function () {
+    $settings = app(SettingsService::class);
+
+    $storeA = Store::factory()->create(['slug' => 'gfb-a']);
+    $storeB = Store::factory()->create(['slug' => 'gfb-b']);
+
+    Setting::create(['store_id' => null, 'key' => 'store.currency', 'value' => 'USD', 'group' => 'store']);
+
+    // Every storefront request resolves a store (header or default
+    // fallback). Globals must stay visible underneath that context.
+    app(CurrentStore::class)->set($storeA);
+    expect($settings->get('store.currency', null, $storeA->id))->toBe('USD');
+
+    app(CurrentStore::class)->set($storeB);
+    expect($settings->get('store.currency', null, $storeB->id))->toBe('USD');
+
+    // Overrides still win over the global.
+    $settings->set('store.currency', 'SAR', 'store', $storeA->id);
+    expect($settings->get('store.currency', null, $storeA->id))->toBe('SAR');
+    expect($settings->get('store.currency', null, $storeB->id))->toBe('USD');
+
+    app(CurrentStore::class)->forget();
+});

@@ -49,6 +49,24 @@ it('does not confirm the order on a forged stripe webhook when lookup fails', fu
     expect($order->fresh()->status)->toBe('pending');
 });
 
+it('ignores a forged tran_id for non-sslcommerz gateways', function () {
+    $order = Order::factory()->pending()->create();
+    $payment = stripeTestPayment($order);
+
+    // tran_id-as-payment-id is an sslcommerz convention only. For any
+    // other gateway it must not resolve a payment, let alone cancel one
+    // without verification.
+    $this->postJson('/api/payments/webhook/stripe', [
+        'type' => 'checkout.session.expired',
+        'data' => ['object' => ['id' => 'cs_fake_session']],
+        'tran_id' => $payment->id,
+    ])->assertNotFound();
+
+    expect($payment->fresh()->status)->toBe('pending');
+    expect($payment->fresh()->gateway_transaction_id)->toBe('cs_test_forged');
+    expect($order->fresh()->status)->toBe('pending');
+});
+
 it('rejects a forged tabby payload when the api lookup fails', function () {
     config(['payment.gateways.tabby.secret_key' => 'sk_test_tabby', 'payment.gateways.tabby.base_url' => 'https://api.tabby.ai']);
     Http::fake(['api.tabby.ai/*' => Http::response([], 500)]);

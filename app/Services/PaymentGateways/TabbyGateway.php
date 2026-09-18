@@ -173,7 +173,7 @@ class TabbyGateway implements PaymentGateway
 
             $data = $response->json();
 
-            return $response->successful() && in_array(strtolower($data['status'] ?? 'refunded'), ['refunded', 'created'], true);
+            return $response->successful() && in_array(strtolower($data['status'] ?? ''), ['refunded', 'created'], true);
         } catch (\Exception $e) {
             Log::error('Tabby refund failed', ['error' => $e->getMessage()]);
 

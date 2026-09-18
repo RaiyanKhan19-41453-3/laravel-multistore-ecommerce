@@ -5,6 +5,7 @@ use App\Models\Payment;
 use App\Services\PaymentGateways\BkashGateway;
 use App\Services\PaymentGateways\PaymentGatewayFactory;
 use App\Services\PaymentGateways\SSLCommerzGateway;
+use Illuminate\Support\Facades\Http;
 
 it('can get enabled payment gateways', function () {
     config(['payment.enabled.cod' => true]);
@@ -152,4 +153,61 @@ it('rejects unimplemented gateway methods at checkout validation', function () {
 
     $response->assertStatus(422)->assertJsonValidationErrors(['payment_method']);
     expect(Order::count())->toBe(0);
+});
+
+it('persists the sslcommerz tran_id at initiation so lookup and refund work pre-webhook', function () {
+    Http::fake([
+        'sandbox.sslcommerz.com/gwprocess/*' => Http::response([
+            'status' => 'SUCCESS',
+            'GatewayPageURL' => 'https://sandbox.sslcommerz.com/pay/abc',
+            'sessionkey' => 'sess_abc',
+        ], 200),
+    ]);
+
+    $order = Order::factory()->create(['status' => 'pending', 'total' => 1000]);
+    $payment = Payment::factory()->create([
+        'order_id' => $order->id,
+        'gateway' => 'sslcommerz',
+        'status' => 'pending',
+        'amount' => 1000,
+        'gateway_transaction_id' => null,
+    ]);
+
+    $result = (new SSLCommerzGateway)->initiatePayment($order, $payment);
+
+    expect($result['redirect_url'])->toBe('https://sandbox.sslcommerz.com/pay/abc');
+    // SSLCommerz identifies the transaction by our tran_id, so it must be
+    // stored at initiation like every sibling gateway does.
+    expect($payment->fresh()->gateway_transaction_id)->toBe((string) $payment->id);
+});
+
+it('sends the stored tran_id when refunding an sslcommerz payment', function () {
+    Http::fake([
+        'sandbox.sslcommerz.com/gwprocess/*' => Http::response([
+            'status' => 'SUCCESS',
+            'GatewayPageURL' => 'https://sandbox.sslcommerz.com/pay/abc',
+            'sessionkey' => 'sess_abc',
+        ], 200),
+        'sandbox.sslcommerz.com/validator/*' => Http::response(['status' => 'success'], 200),
+    ]);
+
+    $order = Order::factory()->create(['status' => 'pending', 'total' => 1000]);
+    $payment = Payment::factory()->create([
+        'order_id' => $order->id,
+        'gateway' => 'sslcommerz',
+        'status' => 'pending',
+        'amount' => 1000,
+        'gateway_transaction_id' => null,
+    ]);
+
+    // Full pre-webhook flow: initiate, mark paid (e.g. verified return), refund.
+    (new SSLCommerzGateway)->initiatePayment($order, $payment);
+    $payment->update(['status' => 'paid', 'paid_at' => now()]);
+
+    expect((new SSLCommerzGateway)->refund($payment->fresh(), 1000))->toBeTrue();
+
+    Http::assertSent(fn ($request) => str_contains(
+        (string) $request->toPsrRequest()->getUri(),
+        'tran_id='.$payment->id
+    ));
 });

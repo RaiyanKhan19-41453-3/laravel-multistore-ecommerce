@@ -57,6 +57,11 @@ class ProductController extends Controller
 
         if ($discountId = $request->query('discount_id')) {
             $discount = Discount::with('categories', 'brands')->find($discountId);
+
+            if (! $discount) {
+                abort(404);
+            }
+
             $query->where(function ($q) use ($discount) {
                 $q->whereHas('discounts', fn ($dq) => $dq->where('discounts.id', $discount->id));
 
@@ -245,20 +250,19 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse
     {
-        $storeId = app(CurrentStore::class)->scopeId();
         $adminStores = app(AdminStoreContext::class);
         $targetStoreId = $adminStores->anchorStoreId($product);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => ['nullable', 'string', 'max:255', Rule::unique('products', 'slug')->ignore($product->id)->where('store_id', $storeId)],
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('products', 'slug')->ignore($product->id)->where('store_id', $targetStoreId)],
             'brand_id' => ['nullable', $adminStores->existsInStore('brands', $targetStoreId)],
             'type' => 'required|in:simple,variable',
             'category_ids' => 'array',
             'category_ids.*' => [$adminStores->existsInStore('categories', $targetStoreId)],
             'description' => 'nullable|string',
             'short_description' => 'nullable|string|max:500',
-            'sku' => ['required', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($product->id)->where('store_id', $storeId)],
+            'sku' => ['required', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($product->id)->where('store_id', $targetStoreId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required_if:type,simple|nullable|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',

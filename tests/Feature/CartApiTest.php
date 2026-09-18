@@ -26,6 +26,15 @@ it('returns empty cart for unauthenticated guest', function () {
     ]);
 });
 
+it('rejects malformed guest tokens instead of erroring', function () {
+    // Longer than the varchar(36) column: must 400, not 500 on insert.
+    // (The cookie path shares the same check; raw overlong cookies cannot
+    // occur in production because cookie encryption drops them first.)
+    $this->getJson('/api/cart', [
+        'X-Guest-Token' => str_repeat('x', 100),
+    ])->assertStatus(400);
+});
+
 it('guest can add simple product to cart', function () {
     $product = Product::factory()->create(['price' => 500, 'is_active' => true]);
     Inventory::factory()->forProduct($product)->withQuantity(50)->create();

@@ -41,9 +41,14 @@ class ResolveAdminStore
                     app(CurrentStore::class)->set($store);
                     $request->attributes->set('store', $store);
                     $request->attributes->set('store_id', $store->id);
+
+                    return $next($request);
                 }
 
-                return $next($request);
+                // An explicit header for an inaccessible store must not leave
+                // the storefront-resolved CurrentStore in place: fall through
+                // to the session selection so listings and creations stay on
+                // a store the user may actually manage.
             }
 
             $selected = $context->selected($user);

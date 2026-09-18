@@ -58,7 +58,14 @@ class EnsureStoreSubscription
             'admin/billing*',
             'admin/store-context*',
             'api/auth/*',
-            'api/stores*'
+            'api/stores*',
+            // Gateway and courier callbacks carry their own identity and
+            // must never be gated on the resolved (often default) store:
+            // blocking them would silently break money and fulfillment
+            // for every store over one store's billing state.
+            'api/payments/webhook*',
+            'api/payments/callback*',
+            'api/webhooks/*'
         );
     }
 

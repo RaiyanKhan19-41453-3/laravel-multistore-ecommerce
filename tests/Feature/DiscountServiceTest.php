@@ -6,6 +6,7 @@ use App\Models\Coupon;
 use App\Models\Discount;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Store;
 use App\Services\DiscountService;
 
 it('calculates percentage discount correctly', function () {
@@ -404,4 +405,143 @@ it('increments coupon usage only for the given coupon', function () {
     $this->assertTrue($result);
     expect($target->fresh()->usage_count)->toBe(2);
     expect($other->fresh()->usage_count)->toBe(1);
+});
+
+it('rejects an exhausted promotion at order time even if the quote saw it live', function () {
+    $service = new DiscountService;
+
+    $live = Discount::factory()->create(['is_active' => true, 'usage_limit' => 5, 'usage_count' => 2]);
+    $service->assertDiscountRedeemable($live);
+    $this->assertTrue(true);
+
+    $spent = Discount::factory()->create(['is_active' => true, 'usage_limit' => 1, 'usage_count' => 1]);
+
+    expect(fn () => $service->assertDiscountRedeemable($spent))
+        ->toThrow(InvalidArgumentException::class, 'usage limit');
+});
+
+it('skips the usage check for unlimited promotions', function () {
+    $service = new DiscountService;
+    $discount = Discount::factory()->create(['is_active' => true, 'usage_limit' => null, 'usage_count' => 999]);
+
+    $service->assertDiscountRedeemable($discount);
+    $this->assertTrue(true);
+});
+
+it('ignores a coupon from another store when quoting for a store', function () {
+    $storeA = Store::factory()->create(['slug' => 'quote-a']);
+    $storeB = Store::factory()->create(['slug' => 'quote-b']);
+
+    $discount = Discount::factory()->fixed()->create(['value' => 200, 'is_active' => true, 'store_id' => $storeB->id]);
+    $coupon = Coupon::factory()->for($discount)->create(['code' => 'XBORDER', 'is_active' => true, 'store_id' => $storeB->id]);
+
+    $product = Product::factory()->create(['price' => 1000, 'is_active' => true, 'store_id' => $storeA->id]);
+
+    $service = new DiscountService;
+    $result = $service->bestDiscountForOrder(
+        1000, 'XBORDER', [$product->id], [$product->id => 1000], [], [
+            ['product_id' => $product->id, 'variant_id' => null, 'total' => 1000],
+        ], null, $storeA->id
+    );
+
+    expect($result)->toBeNull();
+    expect($coupon->fresh())->not->toBeNull();
+});
+
+it('still honors a coupon in its own store', function () {
+    $store = Store::factory()->create(['slug' => 'quote-own']);
+
+    $discount = Discount::factory()->fixed()->create(['value' => 200, 'is_active' => true, 'store_id' => $store->id]);
+    Coupon::factory()->for($discount)->create(['code' => 'LOCAL200', 'is_active' => true, 'store_id' => $store->id]);
+
+    $product = Product::factory()->create(['price' => 1000, 'is_active' => true, 'store_id' => $store->id]);
+
+    $service = new DiscountService;
+    $result = $service->bestDiscountForOrder(
+        1000, 'LOCAL200', [$product->id], [$product->id => 1000], [], [
+            ['product_id' => $product->id, 'variant_id' => null, 'total' => 1000],
+        ], null, $store->id
+    );
+
+    $this->assertNotNull($result);
+    expect((float) ($result['amount'] ?? $result['total_amount']))->toBe(200.0);
+});
+
+it('grants the full nominal amount when a fixed discount splits across lines', function () {
+    $discount = Discount::factory()->fixed()->create(['value' => 10, 'is_active' => true]);
+    $service = new DiscountService;
+
+    $map = $service->getPerItemDiscountAmounts(
+        $discount,
+        [1, 2, 3],
+        [1 => 10.0, 2 => 10.0, 3 => 10.0],
+        [],
+        [
+            ['cart_item_id' => 101, 'product_id' => 1, 'variant_id' => null, 'total' => 10.0],
+            ['cart_item_id' => 102, 'product_id' => 2, 'variant_id' => null, 'total' => 10.0],
+            ['cart_item_id' => 103, 'product_id' => 3, 'variant_id' => null, 'total' => 10.0],
+        ]
+    );
+
+    // 10.00 across three lines must not decay to 9.99 through per-line rounding.
+    expect(round(array_sum(array_column($map, 'amount')), 2))->toBe(10.0);
+});
+
+it('treats mixed product and variant targets as a union', function () {
+    $product1 = Product::factory()->create(['price' => 100, 'is_active' => true]);
+    $product2 = Product::factory()->create(['price' => 100, 'is_active' => true]);
+    $variant = ProductVariant::factory()->for($product2)->create();
+
+    $discount = Discount::factory()->percentage()->create(['value' => 10, 'is_active' => true]);
+    $discount->products()->attach($product1->id);
+    $discount->productVariants()->attach($variant->id);
+
+    $service = new DiscountService;
+    $map = $service->getPerItemDiscountAmounts(
+        $discount,
+        [$product1->id, $product2->id],
+        [$product1->id => 100.0, $product2->id => 100.0],
+        [$variant->id],
+        [
+            ['cart_item_id' => 201, 'product_id' => $product1->id, 'variant_id' => null, 'total' => 100.0],
+            ['cart_item_id' => 202, 'product_id' => $product2->id, 'variant_id' => $variant->id, 'total' => 100.0],
+        ]
+    );
+
+    // Both sides qualify: 10% of the 200 union, split across both lines.
+    expect($map)->toHaveKeys([201, 202]);
+    expect(round(array_sum(array_column($map, 'amount')), 2))->toBe(20.0);
+});
+
+it('never drives usage counts below zero on stale reads', function () {
+    $service = new DiscountService;
+    $discount = Discount::factory()->fixed()->create([
+        'value' => 10, 'is_active' => true, 'usage_limit' => 5, 'usage_count' => 0,
+    ]);
+
+    // Stale in-memory count (as seen under concurrent cancels): the atomic
+    // guard must refuse instead of decrementing the database row to -1.
+    $discount->usage_count = 1;
+
+    expect($service->decrementUsage($discount))->toBeFalse();
+    expect($discount->fresh()->usage_count)->toBe(0);
+});
+
+it('never drives coupon usage counts below zero on stale reads', function () {
+    $service = new DiscountService;
+    $coupon = Coupon::factory()->create(['usage_limit' => 5, 'usage_count' => 0]);
+    $coupon->usage_count = 1;
+
+    expect($service->decrementCouponUsage($coupon))->toBeFalse();
+    expect($coupon->fresh()->usage_count)->toBe(0);
+});
+
+it('rejects an exhausted coupon code at order time', function () {
+    $service = new DiscountService;
+    $coupon = Coupon::factory()->create(['usage_limit' => 1, 'usage_count' => 1, 'per_user_limit' => null]);
+
+    // The global cap must be asserted under lock like the discount cap,
+    // not just the per-user limit.
+    expect(fn () => $service->assertCouponRedeemable($coupon, 'user:1'))
+        ->toThrow(InvalidArgumentException::class, 'usage limit');
 });

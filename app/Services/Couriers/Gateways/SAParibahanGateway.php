@@ -4,7 +4,7 @@ namespace App\Services\Couriers\Gateways;
 
 use App\Models\Order;
 use App\Models\Shipment;
-use Illuminate\Http\Response;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 

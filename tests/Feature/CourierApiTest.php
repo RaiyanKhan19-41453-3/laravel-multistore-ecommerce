@@ -4,6 +4,7 @@ use App\Models\Courier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Shipment;
+use App\Models\Store;
 use App\Models\User;
 use App\Services\Couriers\CourierGatewayFactory;
 use App\Services\Couriers\Gateways\ECourierGateway;
@@ -12,6 +13,7 @@ use App\Services\Couriers\Gateways\RedXGateway;
 use App\Services\Couriers\Gateways\SAParibahanGateway;
 use App\Services\Couriers\Gateways\SteadfastGateway;
 use App\Services\Couriers\Gateways\SundarbanGateway;
+use Illuminate\Support\Facades\Http;
 
 function createCourierAdmin(): User
 {
@@ -509,4 +511,48 @@ it('sundarban gateway throws on cancel', function () {
 
     $this->expectException(RuntimeException::class);
     $gateway->cancelShipment('TEST-123');
+});
+
+it('anchors manual shipments to the order store, not the resolved store', function () {
+    $admin = createCourierAdmin();
+    Store::factory()->create(['slug' => 'shp-a']);
+    $storeB = Store::factory()->create(['slug' => 'shp-b']);
+
+    $order = createCourierOrder();
+    $order->update(['store_id' => $storeB->id]);
+    $courier = Courier::factory()->create(['store_id' => $storeB->id]);
+
+    // Platform view (no selection): resolved store falls back to the
+    // default, but the shipment belongs to the order's store.
+    $this->actingAs($admin)->post("/admin/orders/{$order->id}/shipments", [
+        'courier_id' => $courier->id,
+        'tracking_number' => 'TRACK-B-1',
+    ])->assertRedirect();
+
+    $this->assertDatabaseHas('shipments', [
+        'tracking_number' => 'TRACK-B-1',
+        'store_id' => $storeB->id,
+    ]);
+});
+
+it('refuses to send an unpaid pending order to the courier', function () {
+    Http::fake(['portal.packzy.com/*' => Http::response([
+        'status' => 200,
+        'consignment' => ['consignment_id' => 'SF-1', 'tracking_code' => 'SF-1'],
+    ], 200)]);
+
+    $admin = createCourierAdmin();
+    $courier = Courier::factory()->create([
+        'code' => 'steadfast',
+        'settings' => ['api_key' => 'x', 'secret_key' => 'y'],
+    ]);
+    $order = createCourierOrder('pending');
+
+    // Gateway would succeed, but unpaid goods must never ship: the state
+    // machine rejects the jump and the admin sees the error.
+    $this->actingAs($admin)->post("/admin/orders/{$order->id}/send-to-courier", [
+        'courier_id' => $courier->id,
+    ])->assertSessionHasErrors(['courier_id']);
+
+    expect($order->fresh()->status)->toBe('pending');
 });

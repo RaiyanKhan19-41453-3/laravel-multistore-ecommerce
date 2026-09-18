@@ -11,7 +11,7 @@ import { Link } from '@inertiajs/react';
 import { ArrowRight, ArrowUpRight, BadgePercent, Banknote, ChevronLeft, ChevronRight, RotateCcw, ShieldCheck, Star, Truck, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const DEFAULT_ORDER = ['hero', 'brands', 'categories', 'featured', 'top_rated', 'spotlight', 'banners', 'perks'];
+const DEFAULT_ORDER = ['hero', 'brands', 'categories', 'featured', 'sale', 'new_arrivals', 'top_rated', 'spotlight', 'banners', 'perks'];
 
 interface HomeBlock {
     type: 'section' | 'banner';
@@ -86,6 +86,9 @@ export default function StoreIndex() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [brands, setBrands] = useState<Brand[]>([]);
     const [topRated, setTopRated] = useState<ProductSummary[]>([]);
+    const [saleItems, setSaleItems] = useState<ProductSummary[]>([]);
+    const [newArrivals, setNewArrivals] = useState<ProductSummary[]>([]);
+    const [payMethods, setPayMethods] = useState<{ value: string; label: string }[]>([]);
     const [blocks, setBlocks] = useState<HomeBlock[]>(DEFAULT_ORDER.filter((k) => k !== 'banners').map((key) => ({ type: 'section', key })));
     const [heroDisplay, setHeroDisplay] = useState('split');
     const [heroReady, setHeroReady] = useState(false);
@@ -130,6 +133,27 @@ export default function StoreIndex() {
             .then((r) => (r.ok ? r.json() : null))
             .then((json: { success: boolean; data: PaginatedData<ProductSummary> } | null) => {
                 if (json?.success) setTopRated(json.data.data.filter((p) => (p.review_summary?.total ?? 0) > 0).slice(0, 4));
+            })
+            .catch(() => {});
+
+        void fetch('/api/products?on_sale=1&per_page=10')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: { success: boolean; data: PaginatedData<ProductSummary> } | null) => {
+                if (json?.success) setSaleItems(json.data.data.slice(0, 10));
+            })
+            .catch(() => {});
+
+        void fetch('/api/products?sort=created_at&direction=desc&per_page=8')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: { success: boolean; data: PaginatedData<ProductSummary> } | null) => {
+                if (json?.success) setNewArrivals(json.data.data.slice(0, 8));
+            })
+            .catch(() => {});
+
+        void fetch('/api/payment-methods')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: { success: boolean; data: { methods: { value: string; label: string }[] } } | null) => {
+                if (json?.success && Array.isArray(json.data?.methods)) setPayMethods(json.data.methods);
             })
             .catch(() => {});
 
@@ -186,7 +210,7 @@ export default function StoreIndex() {
             {/* Hero — admin-chosen variant (slider needs saved slides) */}
             {showSection('hero') && heroReady && heroDisplay === 'slider' && slides.length > 0 ? (
                 <section
-                    className="relative overflow-hidden bg-[var(--store-text)] text-[var(--store-bg)]"
+                    className="relative overflow-hidden"
                     style={{ order: blockIndex('hero') }}
                     onMouseEnter={() => setSliderPaused(true)}
                     onMouseLeave={() => setSliderPaused(false)}
@@ -200,25 +224,25 @@ export default function StoreIndex() {
                             {slide.layout === 'full' && slide.image ? (
                                 <>
                                     <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/10" />
+                                    <div className="absolute inset-0 bg-gradient-to-r from-[var(--store-bg)] via-[var(--store-bg)]/75 to-transparent" />
                                 </>
                             ) : (
                                 <div
                                     className="pointer-events-none absolute inset-0"
                                     style={{
                                         backgroundImage:
-                                            'radial-gradient(circle at 88% 8%, var(--store-accent) 0, transparent 42%), radial-gradient(circle at 5% 95%, var(--store-accent) 0, transparent 38%)',
+                                            'radial-gradient(circle at 88% 8%, var(--store-accent-soft) 0, transparent 45%), radial-gradient(circle at 5% 95%, var(--store-accent-soft) 0, transparent 40%)',
                                     }}
                                 />
                             )}
-                            <span aria-hidden="true" className="store-display pointer-events-none absolute -top-8 end-4 text-[9rem] leading-none font-bold text-white/5 select-none md:text-[15rem]">
+                            <span aria-hidden="true" className="store-display pointer-events-none absolute -top-8 end-4 text-[9rem] leading-none font-bold text-[var(--store-text)]/5 select-none md:text-[15rem]">
                                 {String(i + 1).padStart(2, '0')}
                             </span>
                             <div className={`store-container relative grid items-center gap-10 py-14 md:py-20 ${slide.layout === 'full' ? '' : 'lg:grid-cols-[1.05fr_0.95fr]'}`}>
                                 <div className={slide.layout === 'full' ? 'max-w-2xl' : undefined}>
                                     {slide.show_eyebrow !== false && slide.eyebrow && (
-                                        <p className="mb-5 inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.22em] uppercase backdrop-blur">
-                                            <BadgePercent className="h-4 w-4 text-[var(--store-star)]" />
+                                        <p className="mb-5 inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent-soft)] px-4 py-1.5 text-[11px] font-bold tracking-[0.22em] text-[var(--store-accent)] uppercase">
+                                            <BadgePercent className="h-4 w-4" />
                                             {slide.eyebrow}
                                         </p>
                                     )}
@@ -228,7 +252,7 @@ export default function StoreIndex() {
                                         </h1>
                                     )}
                                     {slide.show_subtitle !== false && slide.subtitle && (
-                                        <p className="mt-4 max-w-xl text-base leading-relaxed text-white/75 md:text-lg">{slide.subtitle}</p>
+                                        <p className="mt-4 max-w-xl text-base leading-relaxed text-[var(--store-muted)] md:text-lg">{slide.subtitle}</p>
                                     )}
                                     {slide.show_button !== false && slide.cta_label && (
                                         <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -239,13 +263,13 @@ export default function StoreIndex() {
                                                 {slide.cta_label}
                                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
                                             </Link>
-                                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-3.5 py-2 text-xs font-semibold text-white/80">
-                                                <Banknote className="h-4 w-4" />
+                                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] px-3.5 py-2 text-xs font-semibold text-[var(--store-muted)]">
+                                                <Banknote className="h-4 w-4 text-[var(--store-accent)]" />
                                                 {t('store.cod_note')}
                                             </span>
                                         </div>
                                     )}
-                                    <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-white/60">
+                                    <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-[var(--store-muted)]">
                                         <span className="inline-flex items-center gap-1.5">
                                             <Truck className="h-4 w-4 text-[var(--store-star)]" />
                                             {t('store.perk_shipping_title')}
@@ -262,7 +286,8 @@ export default function StoreIndex() {
                                 </div>
                                 {slide.layout !== 'full' && (
                                 <div className="relative hidden sm:block">
-                                    <div className="relative mx-auto aspect-[4/5] max-h-[540px] w-full max-w-md overflow-hidden rounded-t-[999px] rounded-b-[2rem] border border-white/15 shadow-2xl">
+                                    <div aria-hidden="true" className="absolute inset-4 rotate-3 rounded-t-[999px] rounded-b-[2rem] bg-[var(--store-accent-soft)]" />
+                                    <div className="relative mx-auto aspect-[4/5] max-h-[540px] w-full max-w-md overflow-hidden rounded-t-[999px] rounded-b-[2rem] border border-[var(--store-border)] shadow-2xl">
                                         {slide.image ? (
                                             <img src={slide.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
                                         ) : (
@@ -284,24 +309,18 @@ export default function StoreIndex() {
                         </div>
                     ))}
                     <div className="store-container absolute inset-x-0 bottom-0 flex items-center gap-3 pb-6">
-                        <div className="flex flex-1 gap-1.5">
+                        <div className="flex gap-1.5">
                             {slides.map((slide, i) => (
                                 <button
                                     key={slide.id}
                                     type="button"
                                     aria-label={`Go to slide ${i + 1}`}
                                     onClick={() => setSlideIdx(i)}
-                                    className="h-1 flex-1 overflow-hidden rounded-lg bg-white/20"
-                                >
-                                    {i === slideIdx ? (
-                                        <span key={slideIdx} className={`store-slide-progress block h-full w-full bg-white${sliderPaused ? ' paused' : ''}`} />
-                                    ) : (
-                                        <span className={`block h-full w-full ${i < slideIdx ? 'bg-white/60' : ''}`} />
-                                    )}
-                                </button>
+                                    className={`h-2 rounded-lg transition-all ${i === slideIdx ? 'w-7 bg-[var(--store-accent)]' : 'w-2 bg-[var(--store-text)]/20 hover:bg-[var(--store-text)]/40'}`}
+                                />
                             ))}
                         </div>
-                        <span className="text-xs font-bold tabular-nums text-white/70">
+                        <span className="text-xs font-bold tabular-nums text-[var(--store-muted)]">
                             {String(slideIdx + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
                         </span>
                         <span className="flex gap-2">
@@ -309,7 +328,7 @@ export default function StoreIndex() {
                                 type="button"
                                 aria-label="Previous slide"
                                 onClick={() => setSlideIdx((slideIdx - 1 + slides.length) % slides.length)}
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/25 text-white backdrop-blur transition hover:bg-white/10"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] transition hover:border-[var(--store-accent)] hover:text-[var(--store-accent)]"
                             >
                                 <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
                             </button>
@@ -317,7 +336,7 @@ export default function StoreIndex() {
                                 type="button"
                                 aria-label="Next slide"
                                 onClick={() => setSlideIdx((slideIdx + 1) % slides.length)}
-                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/25 text-white backdrop-blur transition hover:bg-white/10"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] transition hover:border-[var(--store-accent)] hover:text-[var(--store-accent)]"
                             >
                                 <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                             </button>
@@ -463,6 +482,29 @@ export default function StoreIndex() {
             )
             )}
 
+            {/* Category quick chips */}
+            {categories.length > 0 && (
+                <div className="border-b border-[var(--store-border)] bg-[var(--store-card)]">
+                    <div className="store-container flex gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <Link
+                            href="/products"
+                            className="shrink-0 rounded-lg border border-[var(--store-border)] px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition hover:border-[var(--store-text)]"
+                        >
+                            {t('store.all_categories')}
+                        </Link>
+                        {categories.map((cat) => (
+                            <Link
+                                key={cat.id}
+                                href={`/categories/${cat.slug}`}
+                                className="shrink-0 rounded-lg border border-[var(--store-border)] px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition hover:border-[var(--store-text)]"
+                            >
+                                {cat.name}
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Brand marquee */}
             {showSection('brands') && brands.length > 0 && (
                 <section aria-label={t('store.brands_eyebrow')} className="store-marquee overflow-hidden border-b border-[var(--store-border)] bg-[var(--store-card)] py-5" style={{ order: blockIndex('brands') }}>
@@ -525,7 +567,7 @@ export default function StoreIndex() {
 
             {/* Featured Products */}
             {showSection('featured') && (
-            <section id="featured" className="scroll-mt-24 bg-[var(--store-card)] py-16" style={{ order: blockIndex('featured') }}>
+            <section id="featured" className="scroll-mt-24 bg-[var(--store-card)] py-12" style={{ order: blockIndex('featured') }}>
                 <div className="store-container">
                     <SectionHeading
                         eyebrow={t('store.products')}
@@ -561,9 +603,50 @@ export default function StoreIndex() {
             </section>
             )}
 
+            {/* On sale carousel */}
+            {showSection('sale') && saleItems.length > 0 && (
+            <section className="scroll-mt-24 bg-[var(--store-card)] py-12" style={{ order: blockIndex('sale') }}>
+                <div className="store-container">
+                    <SectionHeading
+                        eyebrow={t('store.sale_badge')}
+                        title={t('store.on_sale')}
+                        subtitle={t('store.on_sale_subtitle')}
+                        actionHref="/products"
+                        actionLabel={t('store.view_all')}
+                    />
+                </div>
+                <div className="store-container">
+                    <div className="flex snap-x gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {saleItems.map((product) => (
+                            <div key={product.id} className="w-[170px] shrink-0 snap-start sm:w-[210px]">
+                                <ProductCard product={product} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+            )}
+
+            {/* New arrivals grid */}
+            {showSection('new_arrivals') && newArrivals.length > 0 && (
+            <section className="store-container py-12" style={{ order: blockIndex('new_arrivals') }}>
+                <SectionHeading
+                    title={t('store.new_arrivals')}
+                    subtitle={t('store.new_arrivals_subtitle')}
+                    actionHref="/products?sort=created_at&direction=desc"
+                    actionLabel={t('store.view_all')}
+                />
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    {newArrivals.map((product) => (
+                        <ProductCard key={product.id} product={product} />
+                    ))}
+                </div>
+            </section>
+            )}
+
             {/* Top rated rank list */}
             {showSection('top_rated') && topRated.length > 0 && (
-                <section className="store-container py-16" style={{ order: blockIndex('top_rated') }}>
+                <section className="store-container py-12" style={{ order: blockIndex('top_rated') }}>
                     <SectionHeading title={t('store.rating_sort')} subtitle={t('store.top_rated_subtitle')} actionHref="/products?sort=rating&direction=desc" actionLabel={t('store.view_all')} />
                     <ol className="grid gap-4 md:grid-cols-2">
                         {topRated.map((product, i) => (
@@ -658,6 +741,21 @@ export default function StoreIndex() {
                     ))}
                 </div>
             </section>
+            )}
+
+            {/* Accepted payments */}
+            {payMethods.length > 0 && (
+                <div className="border-t border-[var(--store-border)]">
+                    <div className="store-container flex flex-wrap items-center gap-x-5 gap-y-2 py-4">
+                        <span className="text-xs font-bold tracking-wider text-[var(--store-muted)] uppercase">{t('store.we_accept')}</span>
+                        {payMethods.map((m) => (
+                            <span key={m.value} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] px-3 py-1.5 text-xs font-semibold">
+                                <Banknote className="h-3.5 w-3.5 text-[var(--store-accent)]" />
+                                {m.label}
+                            </span>
+                        ))}
+                    </div>
+                </div>
             )}
             </div>
         </StoreLayout>

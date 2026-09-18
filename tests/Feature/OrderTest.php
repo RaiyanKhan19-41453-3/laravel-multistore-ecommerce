@@ -249,3 +249,14 @@ it('hides gateway internals on order detail', function () {
     $response->assertOk();
     expect($response->json('data.payments.0.gateway_response'))->toBeNull();
 });
+
+it('hides gateway internals on order listing', function () {
+    $user = User::factory()->create();
+    $order = Order::factory()->for($user)->create();
+    Payment::factory()->for($order)->paid()->create(['gateway_response' => ['secret' => 'abc']]);
+
+    $response = $this->actingAs($user)->getJson('/api/orders');
+
+    $response->assertOk();
+    expect($response->json('data.data.0.payments.0.gateway_response'))->toBeNull();
+});

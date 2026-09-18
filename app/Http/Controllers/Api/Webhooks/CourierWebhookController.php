@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
+use App\Models\Store;
+use App\Scopes\BelongsToStore;
 use App\Services\OrderService;
+use App\Support\CurrentStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -21,7 +24,10 @@ class CourierWebhookController extends Controller
     {
         $payload = $request->all();
 
-        $courier = Courier::where('code', $courierCode)->first();
+        // Courier codes and tracking ids are globally unique: never scope
+        // these lookups to the resolved store, or webhooks for other
+        // stores' shipments resolve to nothing.
+        $courier = Courier::withoutGlobalScope(BelongsToStore::class)->where('code', $courierCode)->first();
 
         if (! $courier) {
             Log::warning("{$courierCode} webhook: courier not found");
@@ -47,7 +53,8 @@ class CourierWebhookController extends Controller
             return response()->json(['status' => 'ignored']);
         }
 
-        $shipment = Shipment::where('courier_order_id', $trackingNumber)
+        $shipment = Shipment::withoutGlobalScope(BelongsToStore::class)
+            ->where('courier_order_id', $trackingNumber)
             ->orWhere('tracking_number', $trackingNumber)
             ->first();
 
@@ -182,24 +189,35 @@ class CourierWebhookController extends Controller
 
     private function syncOrderStatus(Shipment $shipment, string $status): void
     {
-        $order = $shipment->order;
+        $order = Order::withoutGlobalScope(BelongsToStore::class)->find($shipment->order_id);
 
         if (! $order) {
             return;
         }
 
-        match ($status) {
-            'delivered' => $order->update([
-                'status' => 'delivered',
-                'delivered_at' => now(),
-            ]),
-            'picked', 'in_transit', 'out_for_delivery' => $order->update([
-                'status' => 'shipped',
-                'shipped_at' => $order->shipped_at ?? now(),
-            ]),
-            'returned' => $this->handleReturned($order),
-            default => null,
-        };
+        // Act in the order's store context: cancel() and notifications
+        // resolve inventory, discounts, and settings ambiently.
+        app(CurrentStore::class)->set($order->store_id ? Store::find($order->store_id) : null);
+
+        try {
+            if ($status === 'delivered') {
+                $this->orderService->markDelivered($order);
+            } elseif (in_array($status, ['picked', 'in_transit', 'out_for_delivery'], true)) {
+                $this->orderService->markShipped($order);
+            } elseif ($status === 'returned') {
+                $this->handleReturned($order);
+            }
+        } catch (\InvalidArgumentException $e) {
+            // Out-of-order or foreign scans must not rewrite the order
+            // state machine (e.g. delivered for an unpaid pending order).
+            Log::warning('Courier webhook: ignored out-of-state order sync', [
+                'order_id' => $order->id,
+                'shipment_id' => $shipment->id,
+                'from' => $order->status,
+                'to' => $status,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function handleReturned(Order $order): void

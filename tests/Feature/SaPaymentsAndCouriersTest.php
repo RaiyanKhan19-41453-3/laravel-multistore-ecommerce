@@ -89,6 +89,26 @@ it('tabby webhook maps authorized to paid', function () {
     expect($gateway->processWebhook(['id' => 'tabby_123', 'status' => 'rejected'])['status'])->toBe('failed');
 });
 
+it('tabby refund fails closed when the response carries no status', function () {
+    config(['payment.gateways.tabby.secret_key' => 'sk_test_tabby', 'payment.gateways.tabby.public_key' => 'pk_test', 'payment.gateways.tabby.merchant_code' => 'MCODE', 'payment.gateways.tabby.base_url' => 'https://api.tabby.ai']);
+    Http::fake(['api.tabby.ai/api/v2/payments/*/refunds' => Http::response([], 200)]);
+
+    $order = Order::factory()->create(['total' => 300, 'order_number' => 'ORD-TABBY-REF']);
+    $payment = Payment::factory()->for($order)->create([
+        'method' => 'tabby',
+        'gateway' => 'tabby',
+        'status' => 'paid',
+        'paid_at' => now(),
+        'amount' => 300,
+        'gateway_transaction_id' => 'tabby_123',
+    ]);
+
+    // A 200 with no status field proves nothing was refunded: fail closed
+    // like the Stripe and Moyasar gateways do.
+    expect((new TabbyGateway)->refund($payment, 300.0))->toBeFalse();
+    expect($payment->fresh()->status)->toBe('paid');
+});
+
 it('stripe initiates checkout session', function () {
     config(['payment.gateways.stripe.secret_key' => 'sk_test_stripe', 'payment.gateways.stripe.base_url' => 'https://api.stripe.com']);
 

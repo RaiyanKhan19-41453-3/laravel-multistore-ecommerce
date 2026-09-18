@@ -75,12 +75,11 @@ class ProductVariantController extends Controller
             ], 422);
         }
 
-        $storeId = app(CurrentStore::class)->scopeId();
         $targetStoreId = app(AdminStoreContext::class)->anchorStoreId($product);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => ['required', 'string', 'max:255', Rule::unique('product_variants', 'sku')->where('store_id', $storeId)],
+            'sku' => ['required', 'string', 'max:255', Rule::unique('product_variants', 'sku')->where('store_id', $targetStoreId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',
@@ -137,12 +136,11 @@ class ProductVariantController extends Controller
             ], 422);
         }
 
-        $storeId = app(CurrentStore::class)->scopeId();
         $targetStoreId = app(AdminStoreContext::class)->anchorStoreId($product);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => ['required', 'string', 'max:255', Rule::unique('product_variants', 'sku')->ignore($variant->id)->where('store_id', $storeId)],
+            'sku' => ['required', 'string', 'max:255', Rule::unique('product_variants', 'sku')->ignore($variant->id)->where('store_id', $targetStoreId)],
             'barcode' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'compare_at_price' => 'nullable|numeric|min:0',

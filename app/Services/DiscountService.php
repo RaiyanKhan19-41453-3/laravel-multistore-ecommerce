@@ -134,11 +134,11 @@ class DiscountService
 
     public function decrementUsage(Discount $discount): bool
     {
-        if ($discount->usage_count <= 0) {
-            return false;
-        }
-
-        return $discount->decrement('usage_count') !== false;
+        // Atomic floor: the in-memory count may be stale under concurrent
+        // cancels, so the check and the decrement must be one statement.
+        return Discount::whereKey($discount->id)
+            ->where('usage_count', '>', 0)
+            ->decrement('usage_count') > 0;
     }
 
     public function incrementCouponUsage(Coupon $coupon): bool
@@ -156,11 +156,10 @@ class DiscountService
 
     public function decrementCouponUsage(Coupon $coupon): bool
     {
-        if ($coupon->usage_count <= 0) {
-            return false;
-        }
-
-        return $coupon->decrement('usage_count') !== false;
+        // Atomic floor, same as decrementUsage above.
+        return Coupon::whereKey($coupon->id)
+            ->where('usage_count', '>', 0)
+            ->decrement('usage_count') > 0;
     }
 
     public function redemptionIdentifier(?User $user, ?string $guestEmail): ?string
@@ -178,16 +177,40 @@ class DiscountService
 
     public function assertCouponRedeemable(Coupon $coupon, ?string $identifier): void
     {
-        if ($identifier === null || $coupon->per_user_limit === null) {
-            return;
-        }
-
         // Re-read under lock so concurrent checkouts serialize on the coupon
         // row. Must run inside the order transaction to hold the lock.
         $coupon = Coupon::lockForUpdate()->find($coupon->id) ?? $coupon;
 
+        // Global coupon cap, mirroring assertDiscountRedeemable: the
+        // quote-time check can go stale between concurrent checkouts.
+        if ($coupon->usage_limit !== null && $coupon->usage_count >= $coupon->usage_limit) {
+            throw new \InvalidArgumentException('This coupon has just reached its usage limit.');
+        }
+
+        if ($identifier === null || $coupon->per_user_limit === null) {
+            return;
+        }
+
         if ($this->countCouponRedemptions($coupon, $identifier) >= $coupon->per_user_limit) {
             throw new \InvalidArgumentException('This coupon has already been used the maximum number of times.');
+        }
+    }
+
+    /**
+     * Enforce a promotion's global usage limit under a row lock.
+     * Must run inside the order transaction so concurrent checkouts
+     * serialize instead of all passing a stale quote-time check.
+     */
+    public function assertDiscountRedeemable(Discount $discount): void
+    {
+        if ($discount->usage_limit === null) {
+            return;
+        }
+
+        $fresh = Discount::lockForUpdate()->find($discount->id) ?? $discount;
+
+        if ($fresh->usage_count >= $fresh->usage_limit) {
+            throw new \InvalidArgumentException('This promotion has just reached its usage limit.');
         }
     }
 
@@ -261,6 +284,12 @@ class DiscountService
 
             if ($coupon && $couponIdentifier !== null && $coupon->per_user_limit !== null
                 && $this->countCouponRedemptions($coupon, $couponIdentifier) >= $coupon->per_user_limit) {
+                $coupon = null;
+            }
+
+            // A coupon attached while the cart was store-less (or stale)
+            // must never discount another store's order.
+            if ($coupon && $storeId !== null && $coupon->store_id !== null && $coupon->store_id !== $storeId) {
                 $coupon = null;
             }
 
@@ -342,10 +371,61 @@ class DiscountService
 
         $hasVariantTargets = ! empty($targeting['variant_ids']);
         $discountVariantIds = $targeting['variant_ids'];
+        $discountProductIds = $discount->products->pluck('id')->toArray();
+
+        // getTargeting() masks variant ids whenever products are attached,
+        // so detect the mixed case from the relations themselves.
+        $hasMixedTargets = $discount->productVariants->isNotEmpty() && ! empty($discountProductIds);
 
         $perItem = [];
 
-        if ($hasVariantTargets && ! empty($items)) {
+        // Mixed targeting (products AND variants attached) is a union: a
+        // line qualifies through either side. Mirrors the union nominal in
+        // getEligibleSubtotal so allocation and header always agree.
+        if ($hasMixedTargets && ! empty($items)) {
+            $unionVariantIds = $discount->productVariants->pluck('id')->toArray();
+            $unionTotal = 0.0;
+
+            foreach ($items as $item) {
+                if (in_array($item['product_id'] ?? null, $discountProductIds, true)
+                    || in_array($item['variant_id'] ?? null, $unionVariantIds, true)) {
+                    $unionTotal += $item['total'];
+                }
+            }
+
+            if ($unionTotal > 0) {
+                foreach ($items as $item) {
+                    $matches = in_array($item['product_id'] ?? null, $discountProductIds, true)
+                        || in_array($item['variant_id'] ?? null, $unionVariantIds, true);
+
+                    if (! $matches) {
+                        continue;
+                    }
+
+                    $itemTotal = $item['total'];
+
+                    if ($itemTotal <= 0) {
+                        continue;
+                    }
+
+                    if ($discount->type === 'percentage') {
+                        $amount = $itemTotal * ((float) $discount->value / 100);
+                    } else {
+                        $amount = ($itemTotal / $unionTotal) * (float) $discount->value;
+                    }
+
+                    $key = $item['cart_item_id'] ?? $item['product_id'];
+                    $perItem[$key] = [
+                        'id' => $discount->id,
+                        'name' => $discount->name,
+                        'type' => $discount->type,
+                        'level' => $level,
+                        'target' => $target,
+                        'amount' => round($amount, 2),
+                    ];
+                }
+            }
+        } elseif ($hasVariantTargets && ! empty($items)) {
             $eligibleItemTotals = [];
             foreach ($items as $item) {
                 if (in_array($item['variant_id'] ?? null, $discountVariantIds)) {
@@ -458,6 +538,24 @@ class DiscountService
             unset($entry);
         }
 
+        // Per-line rounding only ever shaves pennies off the nominal amount
+        // (e.g. 10.00 across three lines sums to 9.99). Credit the remainder
+        // to the last positive line so the full granted amount is honored.
+        $nominal = round($totalAmount, 2);
+        $granted = round(array_sum(array_column($perItem, 'amount')), 2);
+
+        if (! empty($perItem) && $granted < $nominal) {
+            $plugKey = array_key_last($perItem);
+
+            foreach ($perItem as $key => $entry) {
+                if ($entry['amount'] > 0) {
+                    $plugKey = $key;
+                }
+            }
+
+            $perItem[$plugKey]['amount'] = round($perItem[$plugKey]['amount'] + ($nominal - $granted), 2);
+        }
+
         return $perItem;
     }
 
@@ -553,8 +651,27 @@ class DiscountService
             return $fallbackSubtotal;
         }
 
-        $discount->loadMissing('productVariants');
+        $discount->loadMissing(['products', 'productVariants']);
         $hasVariantTargets = $discount->productVariants->isNotEmpty();
+        $hasProductTargets = $discount->products->isNotEmpty();
+
+        // Mixed targeting (products AND variants attached) is a union: a
+        // line qualifies through either side. Without this, the nominal
+        // below would silently drop one side's lines.
+        if ($hasVariantTargets && $hasProductTargets && ! empty($items)) {
+            $unionProductIds = $discount->products->pluck('id')->toArray();
+            $unionVariantIds = $discount->productVariants->pluck('id')->toArray();
+            $eligibleSubtotal = 0;
+
+            foreach ($items as $item) {
+                if (in_array($item['product_id'] ?? null, $unionProductIds, true)
+                    || in_array($item['variant_id'] ?? null, $unionVariantIds, true)) {
+                    $eligibleSubtotal += $item['total'];
+                }
+            }
+
+            return (float) $eligibleSubtotal;
+        }
 
         if ($hasVariantTargets && ! empty($items)) {
             $discountVariantIds = $discount->productVariants->pluck('id')->toArray();

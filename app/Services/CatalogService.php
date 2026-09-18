@@ -49,6 +49,10 @@ class CatalogService
             $query->where('is_featured', filter_var($filters['is_featured'], FILTER_VALIDATE_BOOLEAN));
         }
 
+        if (array_key_exists('on_sale', $filters) && filter_var($filters['on_sale'], FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'price');
+        }
+
         if ($minPrice = $filters['min_price'] ?? null) {
             $query->where('price', '>=', $minPrice);
         }
@@ -61,7 +65,7 @@ class CatalogService
             $attributeValueIds = is_array($attributeValues) ? $attributeValues : explode(',', $attributeValues);
             $query->whereHas('variants', function ($q) use ($attributeValueIds) {
                 $q->whereHas('values', function ($vq) use ($attributeValueIds) {
-                    $vq->whereIn('product_variant_values.id', $attributeValueIds);
+                    $vq->whereIn('attribute_values.id', $attributeValueIds);
                 });
             });
         }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Courier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
@@ -106,4 +107,44 @@ it('paginates orders', function () {
         ->get('/admin/orders');
 
     $response->assertOk();
+});
+
+it('refuses to mark an unpaid pending order delivered via shipment', function () {
+    $admin = createAdmin();
+    $order = createOrderWithItems('pending');
+    $courier = Courier::factory()->create();
+
+    $this->actingAs($admin)->post("/admin/orders/{$order->id}/shipments", [
+        'courier_id' => $courier->id,
+        'tracking_number' => 'PENDING-1',
+    ])->assertRedirect();
+
+    $shipment = $order->shipments()->firstOrFail();
+
+    $this->actingAs($admin)->put("/admin/orders/{$order->id}/shipments/{$shipment->id}", [
+        'status' => 'delivered',
+    ])->assertSessionHasErrors('status');
+
+    expect($order->fresh()->status)->toBe('pending');
+    expect($shipment->fresh()->status)->toBe('delivered');
+});
+
+it('marks a confirmed order shipped via shipment pickup', function () {
+    $admin = createAdmin();
+    $order = createOrderWithItems('confirmed');
+    $courier = Courier::factory()->create();
+
+    $this->actingAs($admin)->post("/admin/orders/{$order->id}/shipments", [
+        'courier_id' => $courier->id,
+        'tracking_number' => 'CONF-1',
+    ])->assertRedirect();
+
+    $shipment = $order->shipments()->firstOrFail();
+
+    $this->actingAs($admin)->put("/admin/orders/{$order->id}/shipments/{$shipment->id}", [
+        'status' => 'picked',
+    ])->assertRedirect();
+
+    expect($order->fresh()->status)->toBe('shipped');
+    expect($order->fresh()->shipped_at)->not->toBeNull();
 });

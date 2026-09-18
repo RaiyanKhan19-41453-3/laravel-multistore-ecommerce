@@ -26,6 +26,10 @@ class OrderController extends Controller
             ->latest()
             ->paginate(15);
 
+        $orders->getCollection()->each(
+            fn ($order) => $order->payments->each(fn ($payment) => $payment->makeHidden('gateway_response'))
+        );
+
         return response()->json([
             'success' => true,
             'data' => $orders,

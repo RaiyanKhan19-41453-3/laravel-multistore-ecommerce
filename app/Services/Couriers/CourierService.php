@@ -5,10 +5,15 @@ namespace App\Services\Couriers;
 use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
+use App\Services\OrderService;
 use Illuminate\Support\Facades\Log;
 
 class CourierService
 {
+    public function __construct(
+        protected OrderService $orderService,
+    ) {}
+
     /**
      * Send an order to the courier API.
      */
@@ -37,11 +42,11 @@ class CourierService
                 'status' => 'pending',
             ]);
 
-            $order->update([
-                'fulfillment_type' => 'courier',
-                'shipped_at' => now(),
-                'status' => 'shipped',
-            ]);
+            // Fulfillment moves go through the order state machine: sending
+            // a pending, cancelled, or delivered order must fail loudly
+            // instead of resurrecting it as shipped.
+            $this->orderService->markShipped($order);
+            $order->update(['fulfillment_type' => 'courier']);
 
             Log::info('Order sent to courier', [
                 'order_id' => $order->id,

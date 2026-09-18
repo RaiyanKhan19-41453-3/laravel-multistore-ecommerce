@@ -8,7 +8,7 @@
             try {
                 $brandSettings = app(App\Services\SettingsService::class);
                 $seoFavicon = $brandSettings->get('store.favicon') ?: $brandSettings->get('store.logo');
-                $seoTheme = $brandSettings->get('store.theme_color') ?: '#dd2e44';
+                $seoTheme = $brandSettings->get('store.theme_color') ?: '#006a4e';
                 $seoTitle = $brandSettings->get('store.meta_title') ?: ($brandSettings->get('store.name') ?? config('app.name', 'Laravel'));
                 $seoDescription = $brandSettings->get('store.meta_description') ?: $brandSettings->get('store.tagline');
                 $seoImage = $brandSettings->get('store.og_image') ?: $brandSettings->get('store.logo');
@@ -29,7 +29,7 @@
         <title inertia>{{ $seoTitle ?? config('app.name', 'Laravel') }}</title>
 
         <link rel="icon" href="{{ $seoFaviconUrl }}">
-        <meta name="theme-color" content="{{ $seoTheme ?? '#dd2e44' }}">
+        <meta name="theme-color" content="{{ $seoTheme ?? '#006a4e' }}">
         @if($seoDescription)<meta name="description" content="{{ $seoDescription }}">@endif
 
         {{-- Social defaults; pages with their own tags (e.g. products) override these. --}}

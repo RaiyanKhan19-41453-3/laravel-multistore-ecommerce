@@ -105,7 +105,7 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
         city: profile.city ?? '',
         meta_title: profile.meta_title ?? '',
         meta_description: profile.meta_description ?? '',
-        theme_color: profile.theme_color ?? '#dd2e44',
+        theme_color: profile.theme_color ?? '#006a4e',
         google_tag_id: profile.google_tag_id ?? '',
         google_site_verification: profile.google_site_verification ?? '',
         meta_pixel_id: profile.meta_pixel_id ?? '',
@@ -227,11 +227,11 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                                     <input
                                         id="profile-theme-color"
                                         type="color"
-                                        value={/^#[0-9a-fA-F]{6}$/.test(data.theme_color) ? data.theme_color : '#dd2e44'}
+                                        value={/^#[0-9a-fA-F]{6}$/.test(data.theme_color) ? data.theme_color : '#006a4e'}
                                         onChange={(e) => setData('theme_color', e.target.value)}
                                         className="h-10 w-14 cursor-pointer rounded-md border bg-white p-1"
                                     />
-                                    <Input value={data.theme_color} onChange={(e) => setData('theme_color', e.target.value)} placeholder="#dd2e44" dir="ltr" className="max-w-32" />
+                                    <Input value={data.theme_color} onChange={(e) => setData('theme_color', e.target.value)} placeholder="#006a4e" dir="ltr" className="max-w-32" />
                                 </div>
                                 {errors.theme_color && <p className="text-destructive text-xs">{errors.theme_color}</p>}
                                 <p className="text-muted-foreground text-xs">Browser chrome color on mobile.</p>

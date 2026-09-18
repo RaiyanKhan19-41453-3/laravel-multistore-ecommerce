@@ -48,7 +48,10 @@ class CartService
             return $existing;
         }
 
-        $cleared = (clone $base)->whereIn('status', ['expired', 'abandoned', 'merged'])->first();
+        // A converted cart is spent: recycle it into a fresh active cart so
+        // the guest keeps shopping on the same token instead of writing to
+        // a cart checkout will forever reject.
+        $cleared = (clone $base)->whereIn('status', ['expired', 'abandoned', 'merged', 'converted'])->first();
 
         if ($cleared) {
             $cleared->update(['status' => 'active', 'expires_at' => now()->addDays(30)]);
@@ -72,6 +75,10 @@ class CartService
 
     public function addItem(Cart $cart, Product $product, ?ProductVariant $variant, int $quantity): Cart
     {
+        if ($quantity < 1) {
+            throw new \InvalidArgumentException('Quantity must be at least 1.');
+        }
+
         $this->validateProduct($product, $variant);
 
         return DB::transaction(function () use ($cart, $product, $variant, $quantity): Cart {

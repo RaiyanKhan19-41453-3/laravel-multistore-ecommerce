@@ -70,6 +70,14 @@ class SSLCommerzGateway implements PaymentGateway
             throw new \RuntimeException('Payment gateway initiation failed: '.($data['failedreason'] ?? 'Unknown error'));
         }
 
+        // SSLCommerz identifies the transaction by our tran_id, so persist it
+        // now: webhook lookup and refund() both need it before any webhook
+        // has arrived, like every sibling gateway does at initiation.
+        $payment->update([
+            'gateway_transaction_id' => (string) $payment->id,
+            'gateway_response' => $data,
+        ]);
+
         return [
             'redirect_url' => $data['GatewayPageURL'] ?? '',
             'session_key' => $data['sessionkey'] ?? '',

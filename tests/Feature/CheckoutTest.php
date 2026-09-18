@@ -7,10 +7,12 @@ use App\Models\CouponRedemption;
 use App\Models\Discount;
 use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
 use App\Services\CartService;
+use App\Services\OrderService;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -760,6 +762,73 @@ it('releases coupon redemption when order is cancelled', function () {
     ], authHeaders($user))->assertOk();
 });
 
+it('refunds the paid payment when an order is cancelled', function () {
+
+    Http::fake([
+        'sandbox.sslcommerz.com/validator/*' => Http::response(['status' => 'success'], 200),
+    ]);
+
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $cart = createCartWithItem($user, $product, 1);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    $order = Order::where('user_id', $user->id)->first();
+    $payment = Payment::factory()->create([
+        'order_id' => $order->id,
+        'gateway' => 'sslcommerz',
+        'method' => 'card',
+        'status' => 'paid',
+        'paid_at' => now(),
+        'amount' => $order->total,
+        'gateway_transaction_id' => (string) $order->id,
+    ]);
+
+    app(OrderService::class)->cancel($order->fresh());
+
+    expect($order->fresh()->status)->toBe('cancelled');
+    expect($payment->fresh()->status)->toBe('refunded');
+    Http::assertSent(fn ($request) => str_contains(
+        (string) $request->toPsrRequest()->getUri(),
+        'tran_id='.$payment->id
+    ));
+});
+
+it('still cancels when the refund fails, leaving the payment for manual review', function () {
+    Http::fake([
+        'sandbox.sslcommerz.com/validator/*' => Http::response(['status' => 'failed'], 200),
+    ]);
+
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $cart = createCartWithItem($user, $product, 1);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    $order = Order::where('user_id', $user->id)->first();
+    $payment = Payment::factory()->create([
+        'order_id' => $order->id,
+        'gateway' => 'sslcommerz',
+        'method' => 'card',
+        'status' => 'paid',
+        'paid_at' => now(),
+        'amount' => $order->total,
+        'gateway_transaction_id' => (string) $order->id,
+    ]);
+
+    app(OrderService::class)->cancel($order->fresh());
+
+    expect($order->fresh()->status)->toBe('cancelled');
+    expect($payment->fresh()->status)->toBe('paid');
+});
+
 it('keys guest coupon redemptions by email', function () {
     $product = createProduct(500, 20);
     $discount = Discount::factory()->fixed()->create(['value' => 50, 'is_active' => true]);
@@ -839,4 +908,147 @@ it('returns a generic message when gateway initiation fails', function () {
     expect($response->json('message'))
         ->not->toContain('secret-internal-failure')
         ->not->toContain('should-not-appear');
+});
+
+it('still grants a limited promotion that has remaining uses', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $discount = Discount::factory()->percentage()->create([
+        'value' => 10,
+        'is_active' => true,
+        'usage_limit' => 5,
+        'usage_count' => 0,
+    ]);
+    $discount->products()->attach($product);
+
+    createCartWithItem($user, $product, 2);
+
+    $response = $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user));
+
+    $response->assertOk();
+
+    $orderId = $response->json('data.order.id');
+
+    $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'confirmed']);
+    expect((float) Order::find($orderId)->discount_total)->toBeGreaterThan(0);
+});
+
+it('lets a guest keep shopping with the same token after checkout', function () {
+    $product = createProduct(500, 20);
+    $token = 'guest-recycle-1';
+
+    $cart = Cart::create(['status' => 'active', 'guest_token' => $token]);
+    CartItem::create(['cart_id' => $cart->id, 'product_id' => $product->id, 'quantity' => 1]);
+
+    $checkout = [
+        ...shippingData(),
+        'payment_method' => 'cod',
+        'guest_email' => 'recycle@example.com',
+    ];
+
+    $this->postJson('/api/checkout', $checkout, ['X-Guest-Token' => $token])->assertOk();
+
+    // Same token again: must yield a fresh active cart, not keep writing
+    // to the converted one (which checkout would then reject forever).
+    $this->postJson('/api/cart/items', [
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ], ['X-Guest-Token' => $token])->assertOk();
+
+    $this->postJson('/api/checkout', $checkout, ['X-Guest-Token' => $token])->assertOk();
+
+    expect(Order::where('guest_email', 'recycle@example.com')->count())->toBe(2);
+});
+
+it('allocates the order discount across items so lines reconcile', function () {
+    $discount = Discount::factory()->fixed()->create(['value' => 10, 'is_active' => true]);
+    $coupon = Coupon::factory()->for($discount)->create([
+        'code' => 'LINEALLOC',
+        'is_active' => true,
+    ]);
+
+    // Even split: 2 x 15.00 with a fixed 10 coupon.
+    $user = createUser();
+    $cart = Cart::create(['user_id' => $user->id, 'status' => 'active']);
+
+    foreach (range(1, 2) as $i) {
+        $product = createProduct(15, 20);
+        CartItem::create(['cart_id' => $cart->id, 'product_id' => $product->id, 'quantity' => 1]);
+    }
+
+    $cart->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    $order = Order::where('user_id', $user->id)->first();
+    $items = $order->items()->orderBy('id')->get();
+
+    expect((float) $order->discount_total)->toBe(10.0);
+    expect($items->map(fn ($item) => (float) $item->discount_amount)->all())->toBe([5.0, 5.0]);
+    expect($items->map(fn ($item) => (float) $item->total)->all())->toBe([10.0, 10.0]);
+
+    // Uneven split: 3 x 10.00 with a fixed 10 coupon. Whatever the engine
+    // grants, the lines must reconcile to it exactly (last line absorbs
+    // the rounding penny).
+    $roundingUser = createUser();
+    $roundingCart = Cart::create(['user_id' => $roundingUser->id, 'status' => 'active']);
+
+    foreach (range(1, 3) as $i) {
+        $product = createProduct(10, 20);
+        CartItem::create(['cart_id' => $roundingCart->id, 'product_id' => $product->id, 'quantity' => 1]);
+    }
+
+    $roundingCart->update(['coupon_id' => $coupon->id]);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($roundingUser))->assertOk();
+
+    $roundingOrder = Order::where('user_id', $roundingUser->id)->first();
+    $roundingItems = $roundingOrder->items()->orderBy('id')->get();
+    $granted = (float) $roundingOrder->discount_total;
+
+    expect($granted)->toBeGreaterThan(0);
+
+    foreach ($roundingItems as $item) {
+        expect((float) $item->total)
+            ->toBe(round((float) $item->subtotal - (float) $item->discount_amount, 2));
+    }
+
+    expect(round($roundingItems->sum(fn ($item) => (float) $item->discount_amount), 2))->toBe($granted);
+    expect(round($roundingItems->sum(fn ($item) => (float) $item->total), 2))
+        ->toBe(round((float) $roundingOrder->subtotal - $granted, 2));
+});
+
+it('rejects a second checkout from the same converted cart', function () {
+    $user = createUser();
+    $product = createProduct(500, 20);
+    $cart = createCartWithItem($user, $product, 1);
+
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertOk();
+
+    // Double-click / retry after timeout: the same cart must not produce a
+    // second order. The row lock serializes racing checkouts; the loser sees
+    // a converted cart and gets a 422 instead of a duplicate order.
+    expect(fn () => app(OrderService::class)->createFromCart(
+        $cart->fresh(), $user, array_merge(shippingData(), ['delivery_phone' => null]), 'cod'
+    ))->toThrow(InvalidArgumentException::class, 'already been checked out');
+
+    // An HTTP retry resolves a fresh empty cart, not a duplicate order.
+    $this->postJson('/api/checkout', [
+        ...shippingData(),
+        'payment_method' => 'cod',
+    ], authHeaders($user))->assertStatus(422);
+
+    expect(Order::where('user_id', $user->id)->count())->toBe(1);
 });

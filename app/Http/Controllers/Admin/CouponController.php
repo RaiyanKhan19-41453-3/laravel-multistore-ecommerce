@@ -27,8 +27,13 @@ class CouponController extends Controller
     {
         $storeId = app(CurrentStore::class)->scopeId();
 
+        // Uniqueness lives in the partition the row lands in: the
+        // discount's store. Validating against the resolved store lets a
+        // duplicate slip through and die on the database unique index.
+        $codeStoreId = $discount->store_id ?? $storeId;
+
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('coupons', 'code')->where('store_id', $storeId)],
+            'code' => ['required', 'string', 'max:50', Rule::unique('coupons', 'code')->where('store_id', $codeStoreId)],
             'usage_limit' => 'nullable|integer|min:1',
             'per_user_limit' => 'nullable|integer|min:1',
             'starts_at' => 'nullable|date',
@@ -60,8 +65,12 @@ class CouponController extends Controller
 
         $storeId = app(CurrentStore::class)->scopeId();
 
+        // Same partition rule as store(): the coupon keeps its own store,
+        // so the code must be unique there, not in the resolved store.
+        $codeStoreId = $coupon->store_id ?? $storeId;
+
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('coupons', 'code')->ignore($coupon->id)->where('store_id', $storeId)],
+            'code' => ['required', 'string', 'max:50', Rule::unique('coupons', 'code')->ignore($coupon->id)->where('store_id', $codeStoreId)],
             'usage_limit' => 'nullable|integer|min:1',
             'per_user_limit' => 'nullable|integer|min:1',
             'starts_at' => 'nullable|date',

@@ -127,13 +127,22 @@ class OrderController extends Controller
 
         $order->update(['fulfillment_type' => 'courier']);
 
-        $order->shipments()->create([
+        // Shipments belong to the order's store. store_id is not fillable,
+        // so the central auto-fill would anchor to the resolved store
+        // (or the default in the platform view) instead. Set directly; the
+        // auto-fill skips non-empty values, so this wins.
+        $shipment = $order->shipments()->create([
             'courier_id' => $courier->id,
             'courier' => $courier->name,
             'tracking_number' => $validated['tracking_number'],
             'status' => 'pending',
             'note' => $validated['note'] ?? null,
         ]);
+
+        if ($shipment->store_id !== $order->store_id) {
+            $shipment->store_id = $order->store_id;
+            $shipment->save();
+        }
 
         return to_route('admin.orders.show', $order);
     }
@@ -162,10 +171,22 @@ class OrderController extends Controller
 
         $shipment->update($updateData);
 
-        if ($validated['status'] === 'delivered') {
-            $order->update(['status' => 'delivered', 'delivered_at' => now()]);
-        } elseif ($validated['status'] === 'in_transit' || $validated['status'] === 'picked') {
-            $order->update(['status' => 'shipped', 'shipped_at' => $order->shipped_at ?? now()]);
+        try {
+            if ($validated['status'] === 'delivered') {
+                $this->orderService->markDelivered($order);
+            } elseif ($validated['status'] === 'in_transit' || $validated['status'] === 'picked') {
+                $this->orderService->markShipped($order);
+            }
+        } catch (\InvalidArgumentException $e) {
+            Log::warning('Shipment status not applied to order', [
+                'order_id' => $order->id,
+                'shipment_id' => $shipment->id,
+                'from' => $order->status,
+                'to' => $validated['status'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->withErrors(['status' => $e->getMessage()]);
         }
 
         return to_route('admin.orders.show', $order);

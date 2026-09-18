@@ -1,7 +1,11 @@
 <?php
 
+use App\Models\Attribute;
+use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Coupon;
 use App\Models\Discount;
+use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Store;
@@ -299,6 +303,132 @@ it('keeps coupons on their discount store', function () {
     $this->assertDatabaseHas('coupons', ['code' => 'BONLY1', 'store_id' => $storeB->id]);
 });
 
+it('returns 404 for an unknown discount filter on admin products', function () {
+    $admin = createAdmin();
+
+    // A bogus (or other-store) discount id must fail closed, not 500 on
+    // a null dereference.
+    $this->actingAs($admin)->get('/admin/products?discount_id=999999')->assertNotFound();
+});
+
+it('validates coupon codes against the discount store, not the resolved store', function () {
+    $admin = createAdmin();
+    $storeA = Store::factory()->create(['slug' => 'cup-a']);
+    $storeB = Store::factory()->create(['slug' => 'cup-b']);
+
+    $discountB = Discount::factory()->create(['store_id' => $storeB->id]);
+    Coupon::factory()->for($discountB)->create(['code' => 'DUPX', 'store_id' => $storeB->id]);
+
+    // Platform view: resolved store is the default (A). DUPX is free in A
+    // but taken in B, where the new coupon would land: must 422, not 500.
+    $this->actingAs($admin)->post("/admin/discounts/{$discountB->id}/coupons", [
+        'code' => 'DUPX',
+    ])->assertSessionHasErrors('code');
+
+    expect($storeA->id)->not->toBe($storeB->id);
+});
+
+it('validates coupon updates against the coupon store, not the resolved store', function () {
+    $admin = createAdmin();
+    Store::factory()->create(['slug' => 'cuu-a']);
+    $storeB = Store::factory()->create(['slug' => 'cuu-b']);
+
+    $discountB = Discount::factory()->create(['store_id' => $storeB->id]);
+    Coupon::factory()->for($discountB)->create(['code' => 'TAKEN', 'store_id' => $storeB->id]);
+    $coupon = Coupon::factory()->for($discountB)->create(['code' => 'FREEB', 'store_id' => $storeB->id]);
+
+    // Platform view: renaming FREEB to TAKEN collides inside B and must
+    // 422 instead of dying on the database unique index.
+    $this->actingAs($admin)->put("/admin/discounts/{$discountB->id}/coupons/{$coupon->id}", [
+        'code' => 'TAKEN',
+    ])->assertSessionHasErrors('code');
+});
+
+it('validates product slugs against the product store on update', function () {
+    $admin = createAdmin();
+    Store::factory()->create(['slug' => 'psl-a']);
+    $storeB = Store::factory()->create(['slug' => 'psl-b']);
+
+    Product::factory()->create(['name' => 'Taken', 'slug' => 'taken', 'store_id' => $storeB->id]);
+    $other = Product::factory()->create(['name' => 'Other', 'slug' => 'other', 'store_id' => $storeB->id]);
+
+    // Platform view: taken inside B must 422, not 500 on the composite unique.
+    $this->actingAs($admin)->put("/admin/products/{$other->id}", [
+        'name' => 'Other',
+        'type' => 'simple',
+        'sku' => $other->sku,
+        'price' => 10,
+        'slug' => 'taken',
+    ])->assertSessionHasErrors('slug');
+
+    // Taken only in the default store is fine for a B product.
+    Product::factory()->create(['name' => 'AOnly', 'slug' => 'a-only', 'store_id' => Store::default()->id]);
+
+    $this->actingAs($admin)->put("/admin/products/{$other->id}", [
+        'name' => 'Other',
+        'type' => 'simple',
+        'sku' => $other->sku,
+        'price' => 10,
+        'slug' => 'a-only',
+    ])->assertSessionHasNoErrors();
+});
+
+it('validates brand slugs against the brand store on update', function () {
+    $admin = createAdmin();
+    Store::factory()->create(['slug' => 'bsl-a']);
+    $storeB = Store::factory()->create(['slug' => 'bsl-b']);
+
+    // store_id is not fillable: set directly like the controllers do.
+    $taken = Brand::create(['name' => 'Taken', 'slug' => 'btaken']);
+    $taken->store_id = $storeB->id;
+    $taken->save();
+    $other = Brand::create(['name' => 'BOther', 'slug' => 'bother']);
+    $other->store_id = $storeB->id;
+    $other->save();
+
+    $this->actingAs($admin)->put("/admin/brands/{$other->id}", [
+        'name' => 'BOther',
+        'slug' => 'btaken',
+    ])->assertSessionHasErrors('slug');
+});
+
+it('anchors attribute values to the attribute store', function () {
+    $admin = createAdmin();
+    Store::factory()->create(['slug' => 'avl-a']);
+    $storeB = Store::factory()->create(['slug' => 'avl-b']);
+
+    $attribute = Attribute::factory()->create(['store_id' => $storeB->id]);
+
+    // Platform view resolves the default store, but the value belongs to B.
+    $this->actingAs($admin)->post("/admin/attributes/{$attribute->id}/values", [
+        'value' => 'Red',
+    ])->assertRedirect();
+
+    $this->assertDatabaseHas('attribute_values', ['value' => 'Red', 'store_id' => $storeB->id]);
+});
+
+it('scopes the inventory listing to the selected store', function () {
+    $staff = createStaffUser('catalog-manager');
+    $storeA = Store::factory()->create(['slug' => 'inv-a']);
+    $storeB = Store::factory()->create(['slug' => 'inv-b']);
+    attachStoreMember($staff, $storeA);
+
+    $productA = Product::factory()->create(['name' => 'Widget A', 'store_id' => $storeA->id]);
+    Inventory::factory()->forProduct($productA)->withQuantity(10)->create(['store_id' => $storeA->id]);
+    $productB = Product::factory()->create(['name' => 'Widget B', 'store_id' => $storeB->id]);
+    Inventory::factory()->forProduct($productB)->withQuantity(20)->create(['store_id' => $storeB->id]);
+
+    $this->actingAs($staff)->postJson('/admin/store-context', ['store_id' => $storeA->id])->assertOk();
+
+    $this->actingAs($staff)->get('/admin/inventory')
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p->component('admin/inventory/index')
+            ->has('inventories', 1)
+            ->where('inventories.0.product_name', 'Widget A')
+            ->where('stats.total_products', 1)
+            ->where('stats.total_stock', 10));
+});
+
 it('gives added members a baseline role so they can open the admin', function () {
     ensureStaffPermissions();
 
@@ -372,4 +502,43 @@ it('strips an auto-granted baseline role but keeps real staff roles', function (
     $this->actingAs($owner)->deleteJson("/admin/store-members/{$veteran->id}", ['X-Store-Slug' => 'strip-b'])
         ->assertOk();
     expect($veteran->fresh()->hasRole('catalog-manager'))->toBeTrue();
+});
+
+it('ignores a storefront header for an inaccessible store in admin listings', function () {
+    $staff = createStaffUser('catalog-manager');
+    $storeA = Store::factory()->create(['slug' => 'hctx-a']);
+    $storeB = Store::factory()->create(['slug' => 'hctx-b']);
+    attachStoreMember($staff, $storeA);
+
+    $productA = Product::factory()->create(['name' => 'Alpha Widget', 'is_active' => true, 'store_id' => $storeA->id]);
+    Product::factory()->create(['name' => 'Beta Widget', 'is_active' => true, 'store_id' => $storeB->id]);
+
+    $this->actingAs($staff)->postJson('/admin/store-context', ['store_id' => $storeA->id])->assertOk();
+
+    // X-Store-Slug targets a store the staffer cannot access: the listing
+    // must stay on the session store instead of leaking the other store.
+    $this->actingAs($staff)->get('/admin/products', ['X-Store-Slug' => 'hctx-b'])
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p->component('admin/products/index')
+            ->has('products.data', 1)
+            ->where('products.data.0.id', $productA->id));
+});
+
+it('anchors admin creations to the session store despite a poisoned header', function () {
+    $staff = createStaffUser('catalog-manager');
+    $storeA = Store::factory()->create(['slug' => 'wctx-a']);
+    $storeB = Store::factory()->create(['slug' => 'wctx-b']);
+    attachStoreMember($staff, $storeA);
+
+    $this->actingAs($staff)->postJson('/admin/store-context', ['store_id' => $storeA->id])->assertOk();
+
+    $this->actingAs($staff)->post('/admin/products', [
+        'name' => 'Anchored Product',
+        'slug' => 'anchored-product',
+        'type' => 'simple',
+        'sku' => 'ANCHORED-1',
+        'price' => 100,
+    ], ['X-Store-Slug' => 'wctx-b'])->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('products', ['slug' => 'anchored-product', 'store_id' => $storeA->id]);
 });

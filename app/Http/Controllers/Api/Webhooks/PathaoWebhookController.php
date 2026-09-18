@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api\Webhooks;
 
 use App\Http\Controllers\Controller;
 use App\Models\Courier;
+use App\Models\Order;
 use App\Models\Shipment;
+use App\Models\Store;
+use App\Scopes\BelongsToStore;
 use App\Services\OrderService;
+use App\Support\CurrentStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +24,9 @@ class PathaoWebhookController extends Controller
     {
         $payload = $request->all();
 
-        $secret = Courier::where('code', 'pathao')->first()?->settings['webhook_secret'] ?? null;
+        // The courier code is a global identifier: never scope it to the
+        // resolved store, or webhooks for other stores are ignored.
+        $secret = Courier::withoutGlobalScope(BelongsToStore::class)->where('code', 'pathao')->first()?->settings['webhook_secret'] ?? null;
 
         if ($secret && ! hash_equals((string) $secret, (string) $request->header('X-Webhook-Secret'))) {
             Log::warning('Pathao webhook: invalid signature');
@@ -40,7 +46,8 @@ class PathaoWebhookController extends Controller
             return response()->json(['status' => 'ignored']);
         }
 
-        $shipment = Shipment::where('courier_order_id', $consignmentId)->first();
+        $shipment = Shipment::withoutGlobalScope(BelongsToStore::class)
+            ->where('courier_order_id', $consignmentId)->first();
 
         if (! $shipment) {
             Log::warning('Pathao webhook: shipment not found', ['consignment_id' => $consignmentId]);
@@ -56,16 +63,32 @@ class PathaoWebhookController extends Controller
                 'courier_response' => $payload,
             ]);
 
-            $order = $shipment->order;
+            $order = Order::withoutGlobalScope(BelongsToStore::class)->find($shipment->order_id);
 
             if (! $order) {
                 return response()->json(['status' => 'processed']);
             }
 
-            if ($status === 'delivered') {
-                $order->update(['status' => 'delivered', 'delivered_at' => now()]);
-            } elseif (in_array($status, ['picked', 'in_transit', 'out_for_delivery'])) {
-                $order->update(['status' => 'shipped', 'shipped_at' => $order->shipped_at ?? now()]);
+            // Act in the order's store context from here on (see
+            // CourierWebhookController::syncOrderStatus).
+            app(CurrentStore::class)->set($order->store_id ? Store::find($order->store_id) : null);
+
+            if ($status === 'delivered' || in_array($status, ['picked', 'in_transit', 'out_for_delivery'], true)) {
+                try {
+                    if ($status === 'delivered') {
+                        $this->orderService->markDelivered($order);
+                    } else {
+                        $this->orderService->markShipped($order);
+                    }
+                } catch (\InvalidArgumentException $e) {
+                    Log::warning('Pathao webhook: ignored out-of-state order sync', [
+                        'order_id' => $order->id,
+                        'shipment_id' => $shipment->id,
+                        'from' => $order->status,
+                        'to' => $status,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             } elseif ($status === 'returned' && $order->status === 'shipped') {
                 try {
                     $this->orderService->cancel($order, 'Returned by courier.');

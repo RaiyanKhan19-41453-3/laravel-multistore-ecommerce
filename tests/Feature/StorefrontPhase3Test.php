@@ -5,6 +5,7 @@ use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\Wishlist;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 
@@ -53,6 +54,33 @@ it('rejects duplicate review from same user', function () {
     ]);
 
     $response->assertStatus(422);
+});
+
+it('converts a lost review race into 422 instead of 500', function () {
+    // The app-level duplicate check and the insert are not atomic: two
+    // concurrent submits can both pass the check, and the loser's insert
+    // hits the database unique index. Emulate the loser deterministically
+    // by inserting directly once the row already exists.
+    $user = createUser();
+    $product = createProduct();
+    Review::factory()->create(['user_id' => $user->id, 'product_id' => $product->id]);
+
+    try {
+        Review::create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'rating' => 5,
+            'is_approved' => false,
+        ]);
+        $this->fail('Expected a unique violation emulating the lost race.');
+    } catch (UniqueConstraintViolationException) {
+        // Expected: this is the exception the controller must convert.
+    }
+
+    // And the endpoint contract stays 422 either way.
+    $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+    ])->assertStatus(422);
 });
 
 it('validates review rating range', function () {

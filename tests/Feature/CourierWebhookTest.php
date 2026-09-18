@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Shipment;
+use App\Models\Store;
 use App\Models\User;
 
 function createWebhookCourier(string $code): Courier
@@ -64,6 +65,22 @@ it('handles redx delivered webhook', function () {
 
     $order->refresh();
     expect($order->status)->toBe('delivered');
+});
+
+it('backfills shipped_at when a courier delivers an unshipped order', function () {
+    $courier = createWebhookCourier('redx');
+    $order = createWebhookOrder('processing');
+    $shipment = createWebhookShipment($order, $courier, 'RX_BACKFILL');
+
+    $this->postJson('/api/webhooks/couriers/redx', [
+        'tracking_number' => 'RX_BACKFILL',
+        'status' => 'delivered',
+    ])->assertOk();
+
+    $order->refresh();
+    expect($order->status)->toBe('delivered');
+    expect($order->shipped_at)->not->toBeNull();
+    expect($order->delivered_at)->not->toBeNull();
 });
 
 it('handles redx delivery-in-progress webhook', function () {
@@ -349,7 +366,7 @@ it('does not update shipment if status mapping returns null', function () {
 
 it('syncs order status to shipped when picked', function () {
     $courier = createWebhookCourier('paperfly');
-    $order = createWebhookOrder('pending');
+    $order = createWebhookOrder('confirmed');
     $shipment = createWebhookShipment($order, $courier, 'PF_SHIP');
 
     $this->postJson('/api/webhooks/couriers/paperfly', [
@@ -372,7 +389,7 @@ it('does not downgrade order status from delivered to shipped', function () {
     ]);
 
     $order->refresh();
-    expect($order->status)->toBe('shipped');
+    expect($order->status)->toBe('delivered');
 });
 
 it('rejects courier webhook with invalid secret', function () {
@@ -483,4 +500,39 @@ it('cancels shipped order via api', function () {
 
     expect($order->fresh()->status)->toBe('cancelled');
     expect($inventory->fresh()->quantity)->toBe(20);
+});
+
+it('ignores a delivered webhook for an unpaid pending order', function () {
+    $courier = createWebhookCourier('redx');
+    $order = createWebhookOrder('pending');
+    $shipment = createWebhookShipment($order, $courier, 'RX_UNPAID');
+
+    $this->postJson('/api/webhooks/couriers/redx', [
+        'tracking_number' => 'RX_UNPAID',
+        'status' => 'delivered',
+    ])->assertOk()->assertJson(['status' => 'processed']);
+
+    // The courier scan is recorded, but the unpaid order must not jump to
+    // delivered: payment and stock deduction never happened.
+    expect($shipment->fresh()->status)->toBe('delivered');
+    expect($order->fresh()->status)->toBe('pending');
+});
+
+it('syncs webhooks for shipments outside the resolved store', function () {
+    $storeB = Store::factory()->create(['slug' => 'whx-b']);
+    $courier = createWebhookCourier('redx');
+    $order = createWebhookOrder('shipped');
+    $order->update(['store_id' => $storeB->id]);
+    $shipment = createWebhookShipment($order, $courier, 'RX_XSTORE');
+    $shipment->update(['store_id' => $storeB->id]);
+
+    // No store header: the webhook resolves the default store, but gateway
+    // tracking ids are globally unique, so the lookup must see every store.
+    $this->postJson('/api/webhooks/couriers/redx', [
+        'tracking_number' => 'RX_XSTORE',
+        'status' => 'delivered',
+    ])->assertOk()->assertJson(['status' => 'processed']);
+
+    expect($shipment->fresh()->status)->toBe('delivered');
+    expect($order->fresh()->status)->toBe('delivered');
 });

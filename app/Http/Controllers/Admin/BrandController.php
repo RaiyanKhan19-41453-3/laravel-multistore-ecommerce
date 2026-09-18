@@ -51,7 +51,7 @@ class BrandController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => ['nullable', 'string', 'max:255', Rule::unique('brands', 'slug')->ignore($brand->id)->where('store_id', $storeId)],
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('brands', 'slug')->ignore($brand->id)->where('store_id', $brand->store_id ?? $storeId)],
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',

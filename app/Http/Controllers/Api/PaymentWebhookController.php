@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Store;
+use App\Scopes\BelongsToStore;
 use App\Services\OrderService;
 use App\Services\PaymentGateways\BkashGateway;
 use App\Services\PaymentGateways\MoyasarGateway;
 use App\Services\PaymentService;
+use App\Support\CurrentStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,8 +42,22 @@ class PaymentWebhookController extends Controller
             return response()->json(['status' => 'error'], 404);
         }
 
+        $this->loadOrder($payment);
+
         if ($payment->isPaid() && $payment->order->status === 'pending') {
             $this->orderService->confirmPayment($payment->order, $payment);
+        } elseif ($payment->isPaid()) {
+            // Late gateway retries can confirm payment after the order
+            // expired or was cancelled (stock already released). Never
+            // silently swallow paid money: flag it for manual review.
+            Log::warning('Payment received for non-pending order; manual review required', [
+                'payment_id' => $payment->id,
+                'order_id' => $payment->order->id,
+                'order_number' => $payment->order->order_number,
+                'order_status' => $payment->order->status,
+                'amount' => $payment->amount,
+                'gateway' => $payment->gateway,
+            ]);
         }
 
         if (in_array($payment->status, ['failed', 'cancelled']) && $payment->order->status === 'pending') {
@@ -58,7 +76,8 @@ class PaymentWebhookController extends Controller
             return null;
         }
 
-        $payment = Payment::where('gateway', 'bkash')
+        $payment = Payment::withoutGlobalScope(BelongsToStore::class)
+            ->where('gateway', 'bkash')
             ->where('gateway_transaction_id', $paymentId)
             ->first();
 
@@ -67,6 +86,8 @@ class PaymentWebhookController extends Controller
 
             return null;
         }
+
+        $this->loadOrder($payment);
 
         if ($payment->isPaid()) {
             return $payment;
@@ -100,13 +121,16 @@ class PaymentWebhookController extends Controller
         }
 
         try {
-            $payment = Payment::where('gateway', 'bkash')
+            $payment = Payment::withoutGlobalScope(BelongsToStore::class)
+                ->where('gateway', 'bkash')
                 ->where('gateway_transaction_id', $paymentId)
                 ->first();
 
             if (! $payment) {
                 return redirect('/checkout?error=bkash_payment_not_found');
             }
+
+            $this->loadOrder($payment);
 
             if ($payment->order->order_number !== $orderNumber) {
                 Log::warning('bKash callback order mismatch', ['payment_id' => $payment->id]);
@@ -165,13 +189,16 @@ class PaymentWebhookController extends Controller
         }
 
         try {
-            $payment = Payment::where('gateway', 'moyasar')
+            $payment = Payment::withoutGlobalScope(BelongsToStore::class)
+                ->where('gateway', 'moyasar')
                 ->where('gateway_transaction_id', $paymentId)
                 ->first();
 
             if (! $payment) {
                 return redirect('/checkout?error=moyasar_payment_not_found');
             }
+
+            $this->loadOrder($payment);
 
             if ($payment->isPaid()) {
                 return redirect('/order-confirmation/'.$payment->order->order_number.'?payment=moyasar_success');
@@ -198,6 +225,22 @@ class PaymentWebhookController extends Controller
             Log::error('Moyasar callback error', ['error' => $e->getMessage()]);
 
             return redirect('/checkout?error=moyasar_callback_error');
+        }
+    }
+
+    /**
+     * Hydrate the payment's order bypassing the ambient store scope, then
+     * act in the order's store context from here on: inventory, discounts,
+     * and notifications all resolve their store ambiently, and the resolved
+     * request store is unrelated to a webhook's globally-unique ids.
+     */
+    private function loadOrder(Payment $payment): void
+    {
+        $order = Order::withoutGlobalScope(BelongsToStore::class)->find($payment->order_id);
+        $payment->setRelation('order', $order);
+
+        if ($order) {
+            app(CurrentStore::class)->set($order->store_id ? Store::find($order->store_id) : null);
         }
     }
 }

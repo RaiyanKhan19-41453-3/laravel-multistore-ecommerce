@@ -3,6 +3,7 @@
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\InventoryService;
 use Database\Seeders\PermissionSeeder;
 
 beforeEach(function () {
@@ -66,6 +67,47 @@ test('cannot reduce stock below zero', function () {
         ]);
 
     $response->assertInvalid(['quantity']);
+
+    $this->inventory->refresh();
+    $this->assertEquals(50, $this->inventory->quantity);
+});
+
+test('cannot adjust stock below reserved holds', function () {
+    $this->inventory->increment('reserved_quantity', 8);
+
+    $response = $this->actingAs($this->user)
+        ->post(route('admin.inventory.adjust', $this->inventory), [
+            'type' => 'damage',
+            'quantity' => -45,
+        ]);
+
+    $response->assertInvalid(['quantity']);
+
+    $this->inventory->refresh();
+    $this->assertEquals(50, $this->inventory->quantity);
+    $this->assertEquals(8, $this->inventory->reserved_quantity);
+});
+
+test('can adjust stock down to exactly the reserved count', function () {
+    $this->inventory->increment('reserved_quantity', 8);
+
+    $response = $this->actingAs($this->user)
+        ->post(route('admin.inventory.adjust', $this->inventory), [
+            'type' => 'damage',
+            'quantity' => -42,
+        ]);
+
+    $response->assertRedirect();
+
+    $this->inventory->refresh();
+    $this->assertEquals(8, $this->inventory->quantity);
+});
+
+test('cannot set stock below reserved holds', function () {
+    $this->inventory->increment('reserved_quantity', 8);
+
+    expect(fn () => app(InventoryService::class)->setQuantity($this->inventory, 5))
+        ->toThrow(InvalidArgumentException::class);
 
     $this->inventory->refresh();
     $this->assertEquals(50, $this->inventory->quantity);

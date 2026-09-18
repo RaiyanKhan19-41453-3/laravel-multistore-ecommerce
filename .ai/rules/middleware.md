@@ -16,3 +16,6 @@ ResolveAdminStore must:
 3. Implement terminate() to clear CurrentStore and AdminStoreContext after the response — prevents state leaking between requests in tests and Octane
 
 The `selected()` method falls back to defaultMembershipId for staff, while `explicitlySelectedId()` does not. Use `selected()` to decide whether to set CurrentStore, not `explicitlySelectedId()`.
+
+## Reject poisoned store headers via session fallback
+ResolveAdminStore falls through to the session selection when the X-Store header names an inaccessible store, so the storefront-resolved CurrentStore never leaks another store's rows into admin listings or creations. Never early-return on the header branch without setting CurrentStore from a store the user may manage.

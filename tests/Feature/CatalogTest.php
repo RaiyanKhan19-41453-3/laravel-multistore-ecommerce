@@ -1,8 +1,12 @@
 <?php
 
+use App\Models\Attribute;
+use App\Models\AttributeValue;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Discount;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Review;
 use App\Services\CatalogCache;
 use Illuminate\Support\Facades\DB;
@@ -144,4 +148,50 @@ it('sorts by rating without dropping unreviewed products', function () {
 
     expect($ids)->toContain($rated->id)->toContain($plain->id);
     expect($ids[0])->toBe($rated->id);
+});
+
+it('filters on-sale products with a real discount', function () {
+    $sale = Product::factory()->create(['price' => 80, 'compare_at_price' => 100, 'is_active' => true]);
+    $regular = Product::factory()->create(['price' => 50, 'compare_at_price' => null, 'is_active' => true]);
+    $fake = Product::factory()->create(['price' => 100, 'compare_at_price' => 100, 'is_active' => true]);
+
+    $ids = collect($this->getJson('/api/products?on_sale=1&per_page=10')->assertOk()->json('data.data'))->pluck('id')->all();
+
+    expect($ids)->toContain($sale->id)->not->toContain($regular->id)->not->toContain($fake->id);
+});
+
+it('hides inactive discounts on product detail', function () {
+    $product = Product::factory()->create(['is_active' => true]);
+    $dead = Discount::factory()->create(['is_active' => false]);
+    $dead->products()->attach($product->id);
+
+    // An inactive discount must not be advertised: checkout would grant 0.
+    $this->getJson("/api/products/{$product->slug}")->assertOk()->assertJsonPath('data.discount', null);
+
+    $live = Discount::factory()->create(['is_active' => true]);
+    $live->products()->attach($product->id);
+
+    $this->getJson("/api/products/{$product->slug}")->assertOk()->assertJsonPath('data.discount.id', $live->id);
+});
+
+it('filters products by attribute value id, not pivot row id', function () {
+    $attribute = Attribute::factory()->create();
+    $valueA = AttributeValue::factory()->for($attribute)->create();
+    $valueB = AttributeValue::factory()->for($attribute)->create();
+
+    $product = Product::factory()->create(['is_active' => true]);
+    $variant = ProductVariant::factory()->for($product)->create();
+    $variant->values()->attach($valueB->id);
+
+    $pivotId = DB::table('product_variant_values')->value('id');
+
+    // The first pivot row (id 1) is not the attached value: filtering by
+    // it must not match, filtering by the value id must.
+    expect($pivotId)->not->toBe($valueB->id);
+
+    $matchIds = collect($this->getJson("/api/products?attribute_values[]={$valueB->id}&per_page=10")->assertOk()->json('data.data'))->pluck('id')->all();
+    expect($matchIds)->toContain($product->id);
+
+    $mismatchIds = collect($this->getJson("/api/products?attribute_values[]={$pivotId}&per_page=10")->assertOk()->json('data.data'))->pluck('id')->all();
+    expect($mismatchIds)->not->toContain($product->id);
 });

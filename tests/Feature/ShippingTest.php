@@ -137,4 +137,20 @@ class ShippingTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors('cities');
     }
+
+    public function test_api_returns_rates_for_country(): void
+    {
+        $method = ShippingMethod::create(['name' => 'Standard', 'is_active' => true]);
+        $zone = ShippingZone::create(['name' => 'Riyadh', 'country' => 'SA', 'cities' => ['Riyadh'], 'is_fallback' => false, 'is_active' => true]);
+        ShippingRate::create(['shipping_method_id' => $method->id, 'shipping_zone_id' => $zone->id, 'price' => 60]);
+
+        // Non-BD zones are unreachable unless the caller passes a country.
+        $response = $this->getJson('/api/shipping/rates?city=Riyadh&subtotal=50&country=SA');
+
+        $response->assertOk()->assertJsonPath('data.0.shipping_cost', 60);
+
+        $response = $this->getJson('/api/shipping/rates?city=Riyadh&subtotal=50');
+
+        $response->assertOk()->assertJsonPath('data', []);
+    }
 }

@@ -67,7 +67,7 @@ class CmsPageController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'title_ar' => 'nullable|string|max:255',
-            'slug' => ['nullable', 'string', 'max:255', Rule::unique('cms_pages', 'slug')->ignore($page->id)->where('store_id', $storeId)],
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('cms_pages', 'slug')->ignore($page->id)->where('store_id', $page->store_id ?? $storeId)],
             'body' => 'nullable|string',
             'body_ar' => 'nullable|string',
             'meta_title' => 'nullable|string|max:255',

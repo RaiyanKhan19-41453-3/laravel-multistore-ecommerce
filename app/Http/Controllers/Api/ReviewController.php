@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Review;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -62,14 +63,24 @@ class ReviewController extends Controller
             ], 422);
         }
 
-        $review = Review::create([
-            'user_id' => $request->user()->id,
-            'product_id' => $product->id,
-            'rating' => $validated['rating'],
-            'title' => $validated['title'] ?? null,
-            'body' => $validated['body'] ?? null,
-            'is_approved' => false,
-        ]);
+        // The check above and this insert are not atomic: concurrent
+        // submits can both pass the check, and the loser hits the unique
+        // index. Surface the same 422, never a 500.
+        try {
+            $review = Review::create([
+                'user_id' => $request->user()->id,
+                'product_id' => $product->id,
+                'rating' => $validated['rating'],
+                'title' => $validated['title'] ?? null,
+                'body' => $validated['body'] ?? null,
+                'is_approved' => false,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have already reviewed this product.',
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

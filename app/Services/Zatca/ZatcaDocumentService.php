@@ -172,21 +172,60 @@ class ZatcaDocumentService
 
         $order->loadMissing(['items', 'items.product']);
 
-        $lines = [];
+        $itemSubtotals = [];
+
         foreach ($order->items as $item) {
-            $lineTotal = round((float) $item->subtotal, 2);
-            $vatAmount = $this->lineVat($order, $item, $lineTotal);
+            $itemSubtotals[] = round((float) $item->subtotal, 2);
+        }
+
+        $subtotal = round(array_sum($itemSubtotals), 2);
+        $discountTotal = round(min(max(0.0, (float) $order->discount_total), $subtotal), 2);
+        $shippingCost = round(max(0.0, (float) $order->shipping_cost), 2);
+
+        $lines = [];
+        $allocatedDiscount = 0.0;
+        $itemCount = count($itemSubtotals);
+
+        foreach ($order->items as $index => $item) {
+            // Discounts are allocated pro-rata so the invoice reflects
+            // what was actually charged; the last line absorbs rounding.
+            $lineDiscount = $subtotal > 0 ? round($discountTotal * ($itemSubtotals[$index] / $subtotal), 2) : 0.0;
+
+            if ($index === $itemCount - 1) {
+                $lineDiscount = round($discountTotal - $allocatedDiscount, 2);
+            }
+
+            $allocatedDiscount += $lineDiscount;
+
+            $quantity = max(1, (int) $item->quantity);
+            $lineTotal = round($itemSubtotals[$index] - $lineDiscount, 2);
 
             $lines[] = [
                 'sku' => $item->sku,
                 'name' => $item->name,
                 'quantity' => $item->quantity,
-                'unit_price' => round((float) $item->unit_price, 2),
+                'unit_price' => round($lineTotal / $quantity, 2),
                 'line_total' => $lineTotal,
                 'vat_rate' => $this->tax->rate($order->store_id),
-                'vat_amount' => $vatAmount,
+                'vat_amount' => 0.0,
+                'exempt' => $this->tax->isExempt($item->product ?? null),
             ];
         }
+
+        if ($shippingCost > 0) {
+            $lines[] = [
+                'sku' => 'DELIVERY',
+                'name' => 'Delivery',
+                'quantity' => 1,
+                'unit_price' => $shippingCost,
+                'line_total' => $shippingCost,
+                'vat_rate' => $this->tax->rate($order->store_id),
+                'vat_amount' => 0.0,
+                'exempt' => false,
+            ];
+        }
+
+        $this->allocateVat($order, $lines);
 
         $uuid = (string) Str::uuid();
         $deviceSerial = $this->deviceForStore($order->store_id)?->serial
@@ -267,15 +306,61 @@ class ZatcaDocumentService
         return $document->fresh();
     }
 
-    private function lineVat(Order $order, object $item, float $lineTotal): float
+    /**
+     * Spread the order's VAT across taxable lines pro-rata so the
+     * summed line VAT equals the charged tax exactly (last taxable
+     * line absorbs rounding). Exempt lines carry zero VAT. Totals in
+     * the XML therefore always reconcile with the order and the QR.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function allocateVat(Order $order, array &$lines): void
     {
-        if (! $this->tax->enabled($order->store_id) || $order->subtotal <= 0) {
-            return 0.0;
+        if (! $this->tax->enabled($order->store_id)) {
+            return;
         }
 
-        $share = $lineTotal / (float) $order->subtotal;
+        $taxTotal = round((float) $order->tax_amount, 2);
 
-        return round((float) $order->tax_amount * $share, 2);
+        $pool = [];
+
+        foreach ($lines as $index => $line) {
+            if (! ($line['exempt'] ?? false)) {
+                $pool[] = $index;
+            } else {
+                $lines[$index]['vat_rate'] = 0.0;
+            }
+        }
+
+        if ($taxTotal <= 0 || empty($pool)) {
+            return;
+        }
+
+        $base = 0.0;
+
+        foreach ($pool as $index) {
+            $base += (float) $lines[$index]['line_total'];
+        }
+
+        $base = round($base, 2);
+
+        if ($base <= 0) {
+            return;
+        }
+
+        $allocated = 0.0;
+        $last = end($pool);
+
+        foreach ($pool as $index) {
+            $share = round($taxTotal * ((float) $lines[$index]['line_total'] / $base), 2);
+
+            if ($index === $last) {
+                $share = round($taxTotal - $allocated, 2);
+            }
+
+            $allocated += $share;
+            $lines[$index]['vat_amount'] = $share;
+        }
     }
 
     private function buyerFromOrder(Order $order): array

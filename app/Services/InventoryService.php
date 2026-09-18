@@ -79,6 +79,15 @@ class InventoryService
                 );
             }
 
+            // Never strand live holds: reducing below reserved units
+            // would push availability negative for carts and orders
+            // already holding stock.
+            if ($newQuantity < $inventory->reserved_quantity) {
+                throw new \InvalidArgumentException(
+                    'Cannot reduce below '.$inventory->reserved_quantity.' reserved unit(s). Release or fulfil those holds first.'
+                );
+            }
+
             $inventory->update(['quantity' => $newQuantity]);
 
             return InventoryMovement::create([
@@ -135,6 +144,12 @@ class InventoryService
 
         DB::transaction(function () use ($inventory, $quantity, $note) {
             $inventory = Inventory::lockForUpdate()->find($inventory->id);
+
+            if ($quantity < $inventory->reserved_quantity) {
+                throw new \InvalidArgumentException(
+                    'Cannot set below '.$inventory->reserved_quantity.' reserved unit(s). Release or fulfil those holds first.'
+                );
+            }
 
             $difference = $quantity - $inventory->quantity;
 

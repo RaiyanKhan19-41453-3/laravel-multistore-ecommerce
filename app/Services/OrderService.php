@@ -27,11 +27,21 @@ class OrderService
         protected TaxService $taxService,
         protected ZatcaDocumentService $zatcaDocuments,
         protected NotificationService $notifications = new NotificationService,
+        protected PaymentService $payments = new PaymentService,
     ) {}
 
     public function createFromCart(Cart $cart, ?User $user, array $shippingData, string $paymentMethod): Order
     {
         $order = DB::transaction(function () use ($cart, $user, $shippingData, $paymentMethod) {
+            // Lock the cart first: racing checkouts (double-click, retry
+            // after timeout) serialize here, and the loser sees a converted
+            // cart instead of creating a duplicate order.
+            $cart = Cart::lockForUpdate()->findOrFail($cart->id);
+
+            if ($cart->status !== 'active') {
+                throw new \InvalidArgumentException('This cart has already been checked out.');
+            }
+
             $cart->load(['items.product.categories', 'items.productVariant', 'coupon.discount']);
 
             if ($cart->items->isEmpty()) {
@@ -110,9 +120,37 @@ class OrderService
                     fn ($d) => $d['discount']->id,
                     $appliedDiscounts,
                 );
+
+                // Re-check global usage limits under row locks inside the
+                // order transaction. The quote-time filter can go stale
+                // between concurrent checkouts; without this, a limited
+                // promotion could be granted more times than allowed.
+                foreach ($appliedDiscounts as $applied) {
+                    $this->discountService->assertDiscountRedeemable($applied['discount']);
+                }
             }
 
             $discountTotal = min($discountTotal, $subtotal);
+
+            // Allocate the granted discount across lines pro-rata (last line
+            // absorbs the rounding penny) so item totals reconcile to the
+            // discounted subtotal instead of staying gross.
+            $allocatedDiscount = 0.0;
+            $orderItemCount = count($orderItems);
+
+            foreach ($orderItems as $index => $line) {
+                $lineDiscount = $subtotal > 0
+                    ? round($discountTotal * ($line['subtotal'] / $subtotal), 2)
+                    : 0.0;
+
+                if ($index === $orderItemCount - 1) {
+                    $lineDiscount = round($discountTotal - $allocatedDiscount, 2);
+                }
+
+                $allocatedDiscount += $lineDiscount;
+                $orderItems[$index]['discount_amount'] = $lineDiscount;
+                $orderItems[$index]['total'] = round($line['subtotal'] - $lineDiscount, 2);
+            }
 
             $discountedSubtotal = round($subtotal - $discountTotal, 2);
 
@@ -299,6 +337,60 @@ class OrderService
         };
     }
 
+    /**
+     * Move a paid, packed order to shipped (courier pickup / in-transit
+     * scans). Only confirmed/processing orders qualify: jumping from
+     * pending would ship unpaid goods, and downgrading a delivered order
+     * would corrupt history. Idempotent for redelivered scans.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function markShipped(Order $order): void
+    {
+        if ($order->status === 'shipped') {
+            $order->update(['shipped_at' => $order->shipped_at ?? now()]);
+
+            return;
+        }
+
+        if (! in_array($order->status, ['confirmed', 'processing'], true)) {
+            throw new \InvalidArgumentException(
+                "Cannot mark order as shipped from '{$order->status}'."
+            );
+        }
+
+        $order->update(['status' => 'shipped', 'shipped_at' => now()]);
+        $this->notifications->notifyOrderShipped($order->fresh() ?? $order);
+    }
+
+    /**
+     * Move an order to delivered (courier delivery scan). Allowed from any
+     * paid pipeline state; shipped_at is backfilled when the pickup scan
+     * never arrived. Never from pending (unpaid), cancelled, expired, or
+     * completed. Idempotent for redelivered scans.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function markDelivered(Order $order): void
+    {
+        if ($order->status === 'delivered') {
+            return;
+        }
+
+        if (! in_array($order->status, ['confirmed', 'processing', 'shipped'], true)) {
+            throw new \InvalidArgumentException(
+                "Cannot mark order as delivered from '{$order->status}'."
+            );
+        }
+
+        $order->update([
+            'status' => 'delivered',
+            'delivered_at' => now(),
+            'shipped_at' => $order->shipped_at ?? now(),
+        ]);
+        $this->notifications->notifyOrderDelivered($order->fresh() ?? $order);
+    }
+
     public function cancel(Order $order, ?string $reason = null): void
     {
         DB::transaction(function () use ($order, $reason) {
@@ -329,7 +421,41 @@ class OrderService
             }
         });
 
+        $this->refundPaidPayments($order);
+
         $this->notifications->notifyOrderCancelled($order->fresh() ?? $order, $reason);
+    }
+
+    /**
+     * Return captured money for every paid payment on a cancelled order.
+     * Runs after the cancel transaction commits so gateway latency never
+     * holds row locks; a failed refund never blocks the cancellation —
+     * it is logged for manual review instead.
+     */
+    private function refundPaidPayments(Order $order): void
+    {
+        $paidPayments = $order->payments()->where('status', 'paid')->get();
+
+        foreach ($paidPayments as $payment) {
+            try {
+                $refunded = $this->payments->refund($payment, (float) $payment->amount);
+            } catch (\Throwable $e) {
+                $refunded = false;
+
+                Log::warning('Order cancelled but refund threw; manual review required', [
+                    'order_id' => $order->id,
+                    'payment_id' => $payment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            if (! $refunded) {
+                Log::warning('Order cancelled but refund failed; manual review required', [
+                    'order_id' => $order->id,
+                    'payment_id' => $payment->id,
+                ]);
+            }
+        }
     }
 
     public function expireOrder(Order $order): void

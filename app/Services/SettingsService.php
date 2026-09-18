@@ -4,13 +4,14 @@ namespace App\Services;
 
 use App\Models\Setting;
 use App\Models\Store;
+use App\Scopes\BelongsToStore;
 use App\Support\CurrentStore;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 class SettingsService
 {
-    public const CACHE_KEY = 'store.settings.v1';
+    public const CACHE_KEY = 'store.settings.v2';
 
     /**
      * Country presets any client can start from. Admin UI applies one
@@ -73,13 +74,18 @@ class SettingsService
         }
 
         return Cache::rememberForever($this->cacheKey($storeId), function () use ($storeId): array {
-            $global = Setting::query()->whereNull('store_id')->pluck('value', 'key')->all();
+            // Bypass the ambient store scope: the store is explicit here,
+            // and globals (NULL store_id) would otherwise be filtered out
+            // on every request that resolved a store.
+            $global = Setting::withoutGlobalScope(BelongsToStore::class)
+                ->whereNull('store_id')->pluck('value', 'key')->all();
 
             if ($storeId === null) {
                 return $global;
             }
 
-            $overrides = Setting::query()->where('store_id', $storeId)->pluck('value', 'key')->all();
+            $overrides = Setting::withoutGlobalScope(BelongsToStore::class)
+                ->where('store_id', $storeId)->pluck('value', 'key')->all();
 
             return array_merge($global, $overrides);
         });
@@ -157,7 +163,7 @@ class SettingsService
 
     private function cacheKey(?int $storeId): string
     {
-        return $storeId === null ? self::CACHE_KEY : "store.{$storeId}.settings.v1";
+        return $storeId === null ? self::CACHE_KEY : "store.{$storeId}.settings.v2";
     }
 
     private function currentStoreId(): ?int
