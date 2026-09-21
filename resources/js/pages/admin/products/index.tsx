@@ -301,7 +301,7 @@ export default function ProductsIndex({
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 text-neutral-500">{product.sku}</td>
-                                        <td className="px-4 py-3 text-neutral-500">{product.brand?.name ?? '—'}</td>
+                                        <td className="px-4 py-3 text-neutral-500">{product.brand?.name ?? '-'}</td>
                                         <td className="px-4 py-3">
                                             {product.categories.length > 0 ? (
                                                 <div className="flex flex-wrap gap-1">
@@ -312,7 +312,7 @@ export default function ProductsIndex({
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <span className="text-neutral-400">—</span>
+                                                <span className="text-neutral-400">-</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
@@ -333,7 +333,7 @@ export default function ProductsIndex({
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <span className="text-neutral-400">—</span>
+                                                <span className="text-neutral-400">-</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">${product.price}</td>

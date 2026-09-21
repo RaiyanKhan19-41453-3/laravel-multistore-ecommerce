@@ -1,17 +1,16 @@
 import ProductCard from '@/components/store/product-card';
-import ProductGridSkeleton from '@/components/store/product-grid-skeleton';
 import ProductImage from '@/components/store/product-image';
+import FlashSale from '@/components/store/flash-sale';
+import StoreButton from '@/components/store/store-button';
 import HomeBanners, { type HomeBanner } from '@/components/store/home-banners';
 import SectionHeading from '@/components/store/section-heading';
 import StoreLayout from '@/layouts/store-layout';
 import { formatPrice } from '@/lib/format';
 import { useStore, useT } from '@/lib/store';
-import type { PaginatedData, ProductSummary } from '@/types';
+import type { ProductSummary } from '@/types';
 import { Link } from '@inertiajs/react';
 import { ArrowRight, ArrowUpRight, BadgePercent, Banknote, ChevronLeft, ChevronRight, RotateCcw, ShieldCheck, Star, Truck, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
-
-const DEFAULT_ORDER = ['hero', 'brands', 'categories', 'featured', 'sale', 'new_arrivals', 'top_rated', 'spotlight', 'banners', 'perks'];
 
 interface HomeBlock {
     type: 'section' | 'banner';
@@ -77,105 +76,36 @@ function toSummary(product: FeaturedProduct): ProductSummary {
     };
 }
 
-export default function StoreIndex() {
+export default function StoreIndex({
+    featured,
+    categories,
+    brands,
+    topRated,
+    saleItems,
+    newArrivals,
+    payMethods,
+    blocks,
+    heroDisplay,
+    slides,
+}: {
+    featured: FeaturedProduct[];
+    categories: Category[];
+    brands: Brand[];
+    topRated: ProductSummary[];
+    saleItems: ProductSummary[];
+    newArrivals: ProductSummary[];
+    payMethods: { value: string; label: string }[];
+    blocks: HomeBlock[];
+    heroDisplay: string;
+    slides: HeroSlide[];
+}) {
     const t = useT();
     const store = useStore();
-    const [featured, setFeatured] = useState<FeaturedProduct[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [fetchError, setFetchError] = useState(false);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [brands, setBrands] = useState<Brand[]>([]);
-    const [topRated, setTopRated] = useState<ProductSummary[]>([]);
-    const [saleItems, setSaleItems] = useState<ProductSummary[]>([]);
-    const [newArrivals, setNewArrivals] = useState<ProductSummary[]>([]);
-    const [payMethods, setPayMethods] = useState<{ value: string; label: string }[]>([]);
-    const [blocks, setBlocks] = useState<HomeBlock[]>(DEFAULT_ORDER.filter((k) => k !== 'banners').map((key) => ({ type: 'section', key })));
-    const [heroDisplay, setHeroDisplay] = useState('split');
-    const [heroReady, setHeroReady] = useState(false);
-    const [slides, setSlides] = useState<HeroSlide[]>([]);
     const [slideIdx, setSlideIdx] = useState(0);
     const [sliderPaused, setSliderPaused] = useState(false);
 
     const blockIndex = (key: string) => blocks.findIndex((b) => b.type === 'section' && b.key === key);
     const showSection = (key: string) => blockIndex(key) !== -1;
-
-    useEffect(() => {
-        void fetch('/api/products/featured')
-            .then((r) => {
-                if (!r.ok) throw new Error('failed');
-                return r.json();
-            })
-            .then((json: { success: boolean; data: FeaturedProduct[] }) => {
-                if (json.success) {
-                    setFeatured(json.data);
-                } else {
-                    setFetchError(true);
-                }
-            })
-            .catch(() => setFetchError(true))
-            .finally(() => setLoading(false));
-
-        void fetch('/api/categories')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: Category[] } | null) => {
-                if (json?.success) setCategories(json.data.slice(0, 8));
-            })
-            .catch(() => {});
-
-        void fetch('/api/brands')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: Brand[] } | null) => {
-                if (json?.success) setBrands(json.data.slice(0, 12));
-            })
-            .catch(() => {});
-
-        void fetch('/api/products?sort=rating&direction=desc&per_page=4')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: PaginatedData<ProductSummary> } | null) => {
-                if (json?.success) setTopRated(json.data.data.filter((p) => (p.review_summary?.total ?? 0) > 0).slice(0, 4));
-            })
-            .catch(() => {});
-
-        void fetch('/api/products?on_sale=1&per_page=10')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: PaginatedData<ProductSummary> } | null) => {
-                if (json?.success) setSaleItems(json.data.data.slice(0, 10));
-            })
-            .catch(() => {});
-
-        void fetch('/api/products?sort=created_at&direction=desc&per_page=8')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: PaginatedData<ProductSummary> } | null) => {
-                if (json?.success) setNewArrivals(json.data.data.slice(0, 8));
-            })
-            .catch(() => {});
-
-        void fetch('/api/payment-methods')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: { methods: { value: string; label: string }[] } } | null) => {
-                if (json?.success && Array.isArray(json.data?.methods)) setPayMethods(json.data.methods);
-            })
-            .catch(() => {});
-
-        void fetch('/api/homepage/blocks')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: HomeBlock[] } | null) => {
-                if (json?.success && Array.isArray(json.data)) setBlocks(json.data);
-            })
-            .catch(() => {});
-
-        void fetch('/api/hero')
-            .then((r) => (r.ok ? r.json() : null))
-            .then((json: { success: boolean; data: { display: string; slides: HeroSlide[] } } | null) => {
-                if (json?.success) {
-                    setHeroDisplay(json.data.display);
-                    setSlides(json.data.slides);
-                    setSlideIdx(0);
-                }
-            })
-            .catch(() => {})
-            .finally(() => setHeroReady(true));
-    }, []);
 
     useEffect(() => {
         if (heroDisplay !== 'slider' || slides.length < 2 || sliderPaused) return;
@@ -207,8 +137,8 @@ export default function StoreIndex() {
     return (
         <StoreLayout title="Home">
             <div className="flex flex-col">
-            {/* Hero — admin-chosen variant (slider needs saved slides) */}
-            {showSection('hero') && heroReady && heroDisplay === 'slider' && slides.length > 0 ? (
+            {/* Hero: admin-chosen variant (slider needs saved slides) */}
+            {showSection('hero') && heroDisplay === 'slider' && slides.length > 0 ? (
                 <section
                     className="relative overflow-hidden"
                     style={{ order: blockIndex('hero') }}
@@ -256,13 +186,10 @@ export default function StoreIndex() {
                                     )}
                                     {slide.show_button !== false && slide.cta_label && (
                                         <div className="mt-8 flex flex-wrap items-center gap-4">
-                                            <Link
-                                                href={slide.cta_link}
-                                                className="inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent)] px-8 py-4 text-sm font-bold text-[var(--store-accent-ink)] shadow-xl transition hover:-translate-y-0.5"
-                                            >
+                                            <StoreButton href={slide.cta_link} size="lg">
                                                 {slide.cta_label}
                                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                                            </Link>
+                                            </StoreButton>
                                             <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] px-3.5 py-2 text-xs font-semibold text-[var(--store-muted)]">
                                                 <Banknote className="h-4 w-4 text-[var(--store-accent)]" />
                                                 {t('store.cod_note')}
@@ -343,7 +270,7 @@ export default function StoreIndex() {
                         </span>
                     </div>
                 </section>
-            ) : showSection('hero') && heroReady && heroDisplay === 'centered' ? (
+            ) : showSection('hero') && heroDisplay === 'centered' ? (
                 <section className="relative overflow-hidden bg-[var(--store-text)] text-[var(--store-bg)]" style={{ order: blockIndex('hero') }}>
                     <div
                         className="pointer-events-none absolute inset-0 opacity-20"
@@ -360,17 +287,14 @@ export default function StoreIndex() {
                         <h1 className="store-display text-4xl leading-[1.05] font-bold tracking-tight text-balance md:text-6xl">{t('store.hero_title')}</h1>
                         <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed opacity-70 md:text-lg">{t('store.hero_subtitle')}</p>
                         <div className="mt-8 flex flex-wrap justify-center gap-3">
-                            <Link
-                                href="/products"
-                                className="inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent)] px-7 py-3.5 text-sm font-bold text-[var(--store-accent-ink)] shadow-xl transition hover:-translate-y-0.5"
-                            >
+                            <StoreButton href="/products" size="lg">
                                 {t('store.shop_now')}
                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                            </Link>
+                            </StoreButton>
                             {categories.length > 0 && (
                                 <a
                                     href="#categories"
-                                    className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                                    className="inline-flex items-center gap-2 rounded-full border border-white/30 px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
                                 >
                                     {t('store.browse_categories')}
                                 </a>
@@ -388,7 +312,7 @@ export default function StoreIndex() {
                     </div>
                 </section>
             ) : (
-                showSection('hero') && heroReady && (
+                showSection('hero') && (
             <section className="relative overflow-hidden bg-[var(--store-text)] text-[var(--store-bg)]" style={{ order: blockIndex('hero') }}>
                 <div
                     className="pointer-events-none absolute inset-0 opacity-20"
@@ -406,17 +330,14 @@ export default function StoreIndex() {
                         <h1 className="store-display text-4xl leading-[1.05] font-bold tracking-tight text-balance md:text-6xl">{t('store.hero_title')}</h1>
                         <p className="mt-5 max-w-xl text-base leading-relaxed opacity-70 md:text-lg">{t('store.hero_subtitle')}</p>
                         <div className="mt-8 flex flex-wrap gap-3">
-                            <Link
-                                href="/products"
-                                className="inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent)] px-7 py-3.5 text-sm font-bold text-[var(--store-accent-ink)] shadow-xl transition hover:-translate-y-0.5"
-                            >
+                            <StoreButton href="/products" size="lg">
                                 {t('store.shop_now')}
                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                            </Link>
+                            </StoreButton>
                             {categories.length > 0 && (
                                 <a
                                     href="#categories"
-                                    className="inline-flex items-center gap-2 rounded-lg border border-white/25 px-7 py-3.5 text-sm font-semibold transition hover:bg-white/10"
+                                    className="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-sm font-semibold transition hover:bg-white/10"
                                 >
                                     {t('store.browse_categories')}
                                 </a>
@@ -434,7 +355,7 @@ export default function StoreIndex() {
                     </div>
 
                     {/* Live collage */}
-                    <div className="relative hidden min-h-105 select-none sm:block" aria-hidden={!loading && heroImages.length === 0}>
+                    <div className="relative hidden min-h-105 select-none sm:block" aria-hidden={heroImages.length === 0}>
                         {heroImages.length > 0 ? (
                             <>
                                 {heroImages[0] && (
@@ -470,11 +391,9 @@ export default function StoreIndex() {
                                 )}
                             </>
                         ) : (
-                            !loading && (
-                                <div className="flex h-full min-h-80 items-center justify-center rounded-xl border border-dashed border-white/20 text-sm opacity-50">
-                                    {store.name}
-                                </div>
-                            )
+                            <div className="flex h-full min-h-80 items-center justify-center rounded-xl border border-dashed border-white/20 text-sm opacity-50">
+                                {store.name}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -577,23 +496,12 @@ export default function StoreIndex() {
                         actionLabel={t('store.view_all')}
                     />
 
-                    {loading ? (
-                        <ProductGridSkeleton />
-                    ) : fetchError ? (
-                        <div className="rounded-xl border border-[var(--store-border)] p-10 text-center">
-                            <p className="text-[var(--store-muted)]">
-                                {t('store.error_loading')}{' '}
-                                <button type="button" onClick={() => window.location.reload()} className="font-semibold text-[var(--store-accent)] hover:underline">
-                                    {t('store.view_all')}
-                                </button>
-                            </p>
-                        </div>
-                    ) : featured.length === 0 ? (
+                    {featured.length === 0 ? (
                         <p className="rounded-xl border border-dashed border-[var(--store-border)] p-10 text-center text-[var(--store-muted)]">
                             {t('store.no_products')}
                         </p>
                     ) : (
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
                             {featured.map((product) => (
                                 <ProductCard key={product.id} product={toSummary(product)} />
                             ))}
@@ -601,6 +509,21 @@ export default function StoreIndex() {
                     )}
                 </div>
             </section>
+            )}
+
+            {/* Flash sale countdown rail */}
+            {showSection('sale') && saleItems.length > 0 && (
+                <div style={{ order: blockIndex('sale') }}>
+                    <FlashSale
+                        items={saleItems}
+                        title={t('store.flash_sale')}
+                        endsLabel={t('store.ends_in')}
+                        shopAllLabel={t('store.view_all')}
+                        hoursLabel={t('store.hours_short')}
+                        minutesLabel={t('store.minutes_short')}
+                        secondsLabel={t('store.seconds_short')}
+                    />
+                </div>
             )}
 
             {/* On sale carousel */}
@@ -616,10 +539,10 @@ export default function StoreIndex() {
                     />
                 </div>
                 <div className="store-container">
-                    <div className="flex snap-x gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {saleItems.map((product) => (
-                            <div key={product.id} className="w-[170px] shrink-0 snap-start sm:w-[210px]">
-                                <ProductCard product={product} />
+                            <div key={product.id} className="w-[150px] shrink-0 snap-start sm:w-[180px]">
+                                <ProductCard product={product} compact />
                             </div>
                         ))}
                     </div>
@@ -636,7 +559,7 @@ export default function StoreIndex() {
                     actionHref="/products?sort=created_at&direction=desc"
                     actionLabel={t('store.view_all')}
                 />
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 xl:grid-cols-6">
                     {newArrivals.map((product) => (
                         <ProductCard key={product.id} product={product} />
                     ))}
@@ -685,7 +608,7 @@ export default function StoreIndex() {
                         <div className="relative min-h-72 md:min-h-105">
                             <ProductImage src={spotlight.primary_image} seed={spotlight.id} alt={spotlight.name} eager className="absolute inset-0 h-full w-full object-cover" />
                             {spotlightDiscount > 0 && (
-                                <span className="absolute top-5 start-5 rounded-lg bg-red-600 px-3.5 py-1.5 text-sm font-black text-white shadow-xl">
+                                <span className="absolute top-5 start-5 rounded-lg bg-[var(--store-deal)] px-3.5 py-1.5 text-sm font-black text-white shadow-xl">
                                     -{spotlightDiscount}%
                                 </span>
                             )}
@@ -702,13 +625,10 @@ export default function StoreIndex() {
                                 )}
                             </div>
                             <div className="mt-7">
-                                <Link
-                                    href={`/products/${spotlight.slug}`}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent)] px-7 py-3.5 text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5"
-                                >
+                                <StoreButton href={`/products/${spotlight.slug}`} size="lg">
                                     {t('store.shop_now')}
                                     <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                                </Link>
+                                </StoreButton>
                             </div>
                         </div>
                     </div>

@@ -190,7 +190,7 @@ export default function DiscountEdit({
                             <div className="grid gap-2">
                                 <Label>Variants</Label>
                                 <MultiCombobox
-                                    options={variants.map((v) => ({ value: v.id.toString(), label: `${v.product.name} — ${v.name}${v.sku ? ` (${v.sku})` : ''}` }))}
+                                    options={variants.map((v) => ({ value: v.id.toString(), label: `${v.product.name}: ${v.name}${v.sku ? ` (${v.sku})` : ''}` }))}
                                     value={data.variant_ids}
                                     onChange={(v) => setData('variant_ids', v)}
                                     placeholder="All variants"

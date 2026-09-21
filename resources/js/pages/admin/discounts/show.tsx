@@ -244,7 +244,7 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
                                         <p className="mb-1 text-xs font-medium uppercase text-neutral-500">Variants</p>
                                         <div className="flex flex-wrap gap-1">
                                             {discount.productVariants?.map((v) => (
-                                                <Badge key={v.id} variant="secondary">{v.product.name} — {v.name}</Badge>
+                                                <Badge key={v.id} variant="secondary">{v.product.name}: {v.name}</Badge>
                                             ))}
                                         </div>
                                     </div>
@@ -311,9 +311,9 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
                                             {coupon.per_user_limit !== null ? `${coupon.per_user_limit}×` : 'Unlimited'}
                                         </td>
                                         <td className="px-4 py-3 text-neutral-500">
-                                            {coupon.starts_at ? new Date(coupon.starts_at).toLocaleDateString() : '—'}
+                                            {coupon.starts_at ? new Date(coupon.starts_at).toLocaleDateString() : '-'}
                                             {' to '}
-                                            {coupon.ends_at ? new Date(coupon.ends_at).toLocaleDateString() : '—'}
+                                            {coupon.ends_at ? new Date(coupon.ends_at).toLocaleDateString() : '-'}
                                         </td>
                                         <td className="px-4 py-3">
                                             <Badge variant={coupon.is_active ? 'default' : 'secondary'}>

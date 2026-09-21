@@ -52,7 +52,7 @@ export default function ProductImages({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Images — ${product.name}`} />
+            <Head title={`Images: ${product.name}`} />
 
             <div className="flex h-full flex-1 flex-col gap-6 p-6">
                 <div className="flex items-center justify-between">

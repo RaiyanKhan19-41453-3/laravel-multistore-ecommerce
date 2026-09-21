@@ -1,4 +1,5 @@
 import StoreLayout from '@/layouts/store-layout';
+import StoreButton from '@/components/store/store-button';
 import { apiStore } from '@/lib/auth';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -25,12 +26,9 @@ export default function ResetPassword() {
                     <p className="mb-6 text-sm text-[var(--store-muted)]">
                         This password reset link is invalid or has expired.
                     </p>
-                    <Link
-                        href="/account/forgot-password"
-                        className="rounded-lg bg-[var(--store-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-                    >
+                    <StoreButton href="/account/forgot-password">
                         Request a new link
-                    </Link>
+                    </StoreButton>
                 </div>
             </StoreLayout>
         );
@@ -109,13 +107,9 @@ export default function ResetPassword() {
                         />
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={busy}
-                        className="rounded-lg bg-[var(--store-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                    >
+                    <StoreButton type="submit" disabled={busy} className="w-full">
                         {busy ? 'Resetting...' : 'Reset Password'}
-                    </button>
+                    </StoreButton>
                 </form>
 
                 <p className="mt-6 text-center text-sm text-[var(--store-muted)]">

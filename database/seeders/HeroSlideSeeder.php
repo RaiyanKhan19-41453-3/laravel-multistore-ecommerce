@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Demo hero slides showcasing the slider variant.
- * Idempotent — safe to re-run.
+ * Idempotent: safe to re-run.
  *
  * Run with: php artisan db:seed --class=HeroSlideSeeder
  */

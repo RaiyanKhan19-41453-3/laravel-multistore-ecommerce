@@ -32,5 +32,6 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Services/**, app/Services/NotificationService.php, app/Services/OrderService.php, app/Services/InventoryService.php, app/Services/CatalogService.php, app/Services/ImageService.php, app/Services/SettingsService.php, app/Services/DiscountService.php, app/Services/PaymentService.php | .ai/rules/services.md |
 | resources/js/pages/store/**/*.tsx | .ai/rules/store.md |
 | app/Support/*.php, app/Http/Middleware/ResolveAdminStore.php | .ai/rules/support-http-middleware.md |
+| resources/views/** | .ai/rules/views.md |
 | app/Http/Controllers/Api/Webhooks/** | .ai/rules/webhooks.md |
 | app/Services/Zatca/**, app/Services/Zatca/UblInvoiceBuilder.php | .ai/rules/zatca.md |

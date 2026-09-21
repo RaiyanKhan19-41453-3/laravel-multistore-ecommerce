@@ -30,9 +30,9 @@ class SettingController extends Controller
                 'cod' => 'Cash on Delivery',
                 'sslcommerz' => 'SSLCommerz (BD)',
                 'bkash' => 'bKash (BD)',
-                'moyasar' => 'Moyasar — Mada / Cards (SA)',
-                'tabby' => 'Tabby — Pay in 4 (SA)',
-                'stripe' => 'Stripe — International Cards',
+                'moyasar' => 'Moyasar: Mada / Cards (SA)',
+                'tabby' => 'Tabby: Pay in 4 (SA)',
+                'stripe' => 'Stripe: International Cards',
             ],
         ]);
     }

@@ -251,7 +251,7 @@ export default function CouriersIndex({ couriers }: { couriers: Courier[] }) {
             <Dialog open={!!settingsCourier} onOpenChange={(open) => !open && setSettingsCourier(null)}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>API Settings — {settingsCourier?.name}</DialogTitle>
+                        <DialogTitle>API Settings: {settingsCourier?.name}</DialogTitle>
                     </DialogHeader>
                     {settingsCourier && <SettingsForm courier={settingsCourier} onClose={() => setSettingsCourier(null)} />}
                 </DialogContent>

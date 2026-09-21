@@ -45,7 +45,7 @@ export default function PageEdit({ page }: { page: CmsPageData }) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Edit — ${page.title}`} />
+            <Head title={`Edit: ${page.title}`} />
             <div className="flex flex-col gap-6 p-4">
                 <Heading title="Edit Page" description={`Editing "${page.title}"`} />
 

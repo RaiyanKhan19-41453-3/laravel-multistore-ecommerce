@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\Store;
 use App\Services\SettingsService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -95,24 +97,14 @@ it('saves search and social settings', function () {
     $admin = createAdmin();
 
     $this->actingAs($admin)->put('/admin/store-profile', [
-        'meta_title' => 'Demo Shop — quality online',
+        'meta_title' => 'Demo Shop: quality online',
         'meta_description' => 'Shop quality products with fast delivery.',
-        'theme_color' => '#123abc',
     ])->assertRedirect('/admin/store-profile');
 
     $settings = app(SettingsService::class);
 
-    expect($settings->get('store.meta_title'))->toBe('Demo Shop — quality online')
-        ->and($settings->get('store.meta_description'))->toBe('Shop quality products with fast delivery.')
-        ->and($settings->get('store.theme_color'))->toBe('#123abc');
-});
-
-it('rejects an invalid theme color', function () {
-    $admin = createAdmin();
-
-    $this->actingAs($admin)->putJson('/admin/store-profile', [
-        'theme_color' => 'not-a-color',
-    ])->assertJsonValidationErrors(['theme_color']);
+    expect($settings->get('store.meta_title'))->toBe('Demo Shop: quality online')
+        ->and($settings->get('store.meta_description'))->toBe('Shop quality products with fast delivery.');
 });
 
 it('uploads and removes the favicon and share image', function () {
@@ -150,15 +142,69 @@ it('renders saved meta defaults in the storefront head', function () {
     $settings = app(SettingsService::class);
     $settings->set('store.meta_title', 'Demo Shop', 'store');
     $settings->set('store.meta_description', 'Best shop ever.', 'store');
-    $settings->set('store.theme_color', '#123abc', 'store');
     $settings->set('store.favicon', '/storage/favicons/demo.png', 'store');
 
     $this->get('/')
         ->assertOk()
         ->assertSee('<link rel="icon" href="'.config('app.url').'/storage/favicons/demo.png">', false)
-        ->assertSee('<meta name="theme-color" content="#123abc">', false)
+        ->assertSee('<meta name="theme-color" content="#0e7a3d">', false)
         ->assertSee('<meta name="description" content="Best shop ever.">', false)
         ->assertSee('<meta property="og:site_name" content="Demo Shop">', false);
+});
+
+it('renders scraper tags crawlers can see without javascript', function () {
+    $product = Product::factory()->create([
+        'is_active' => true,
+        'name' => 'Shareable Widget',
+        'short_description' => 'Share this widget.',
+    ]);
+
+    $home = $this->get('/')->assertOk()->getContent();
+
+    expect($home)->toContain('<meta property="og:title"')
+        ->toContain('<meta property="og:url"')
+        ->toContain('<link rel="canonical"')
+        ->toContain('<meta property="og:locale"')
+        ->toContain('<meta name="twitter:title"');
+
+    // Product pages carry their own title/description server-side so
+    // WhatsApp/Facebook unfurls work without executing javascript.
+    $page = $this->get("/products/{$product->slug}")->assertOk()->getContent();
+
+    expect($page)->toContain('<meta property="og:type" content="product">')
+        ->toContain('<meta property="og:title" content="Shareable Widget">')
+        ->toContain('<meta property="og:description" content="Share this widget.">');
+});
+
+it('renders the twitter handle and product commerce tags', function () {
+    $settings = app(SettingsService::class);
+    $settings->set('marketing.twitter_handle', '@shop', 'marketing');
+
+    $product = Product::factory()->create([
+        'is_active' => true,
+        'price' => 500,
+    ]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(5)->create();
+
+    $page = $this->get("/products/{$product->slug}")->assertOk()->getContent();
+
+    expect($page)->toContain('<meta name="twitter:site" content="@shop">')
+        ->toContain('<meta property="product:price:amount" content="500">')
+        ->toContain('<meta property="og:availability" content="instock">');
+
+    $inventory->update(['quantity' => 0, 'reserved_quantity' => 0]);
+
+    $soldOut = $this->get("/products/{$product->slug}")->assertOk()->getContent();
+
+    expect($soldOut)->toContain('<meta property="og:availability" content="out of stock">');
+});
+
+it('rejects a malformed twitter handle', function () {
+    $admin = createAdmin();
+
+    $this->actingAs($admin)->putJson('/admin/store-profile', [
+        'twitter_handle' => 'not-a-handle',
+    ])->assertJsonValidationErrors(['twitter_handle']);
 });
 
 it('saves analytics and pixel IDs', function () {
@@ -229,4 +275,62 @@ it('lets product pages keep their own share image instead of the default', funct
     $home = $this->get('/')->assertOk()->getContent();
 
     expect($home)->toContain('/storage/social/default.jpg');
+});
+
+it('toggles the store name beside the logo', function () {
+    $admin = createAdmin();
+
+    $this->actingAs($admin)->putJson('/admin/store-profile', [
+        'show_store_name' => false,
+    ])->assertRedirect('/admin/store-profile');
+
+    expect(app(SettingsService::class)->get('store.show_store_name'))->toBe('0');
+
+    $this->get('/')->assertOk()
+        ->assertInertia(fn ($p) => $p->where('store.show_store_name', false));
+
+    $this->actingAs($admin)->putJson('/admin/store-profile', [
+        'show_store_name' => true,
+    ])->assertRedirect('/admin/store-profile');
+
+    expect(app(SettingsService::class)->get('store.show_store_name'))->toBe('1');
+
+    $this->get('/')->assertOk()
+        ->assertInertia(fn ($p) => $p->where('store.show_store_name', true));
+});
+
+it('shows the store name instead of the framework app name', function () {
+    config(['app.name' => 'Laravel Framework']);
+    Store::default()?->update(['name' => 'My Store']);
+
+    $this->get('/')->assertOk()
+        ->assertInertia(fn ($p) => $p->where('store.name', 'My Store'));
+});
+
+it('manages social card settings and renders them', function () {
+    $admin = createAdmin();
+
+    $this->actingAs($admin)->putJson('/admin/store-profile', [
+        'twitter_card' => 'summary',
+        'og_image_alt' => 'Our storefront',
+        'robots_noindex' => true,
+    ])->assertRedirect('/admin/store-profile');
+
+    $settings = app(SettingsService::class);
+
+    expect($settings->get('social.twitter_card'))->toBe('summary')
+        ->and($settings->get('social.og_image_alt'))->toBe('Our storefront')
+        ->and($settings->get('store.robots_noindex'))->toBe('1');
+
+    expect($this->get('/')->getContent())
+        ->toContain('<meta name="twitter:card" content="summary">')
+        ->toContain('<meta name="robots" content="noindex, nofollow">');
+});
+
+it('rejects an invalid twitter card style', function () {
+    $admin = createAdmin();
+
+    $this->actingAs($admin)->putJson('/admin/store-profile', [
+        'twitter_card' => 'banner',
+    ])->assertJsonValidationErrors(['twitter_card']);
 });

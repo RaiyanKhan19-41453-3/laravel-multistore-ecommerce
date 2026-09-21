@@ -174,7 +174,7 @@ class ReportController extends Controller
             ->groupBy('orders.shipping_method_name')
             ->chunk(200, function ($rows) use ($out) {
                 foreach ($rows as $r) {
-                    fputcsv($out, [$r->shipping_method_name ?? '—', $r->orders, $r->shipping_revenue]);
+                    fputcsv($out, [$r->shipping_method_name ?? '-', $r->orders, $r->shipping_revenue]);
                 }
             });
     }

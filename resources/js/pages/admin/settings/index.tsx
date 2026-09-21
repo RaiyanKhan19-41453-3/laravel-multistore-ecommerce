@@ -134,10 +134,10 @@ export default function AdminSettings({ settings, presets, currencies, taxModes,
                                     value={data.store.country}
                                     onChange={(e) => setField('store', 'country', e.target.value)}
                                 >
-                                    <option value="BD">BD — Bangladesh</option>
-                                    <option value="SA">SA — Saudi Arabia</option>
-                                    <option value="AE">AE — UAE</option>
-                                    <option value="US">US — United States</option>
+                                    <option value="BD">BD: Bangladesh</option>
+                                    <option value="SA">SA: Saudi Arabia</option>
+                                    <option value="AE">AE: UAE</option>
+                                    <option value="US">US: United States</option>
                                 </select>
                             </div>
                             <div className="grid gap-2">
@@ -167,7 +167,7 @@ export default function AdminSettings({ settings, presets, currencies, taxModes,
                                 >
                                     {locales.map((l) => (
                                         <option key={l} value={l}>
-                                            {l === 'ar' ? 'ar — العربية (RTL)' : 'en — English'}
+                                            {l === 'ar' ? 'ar: العربية (RTL)' : 'en: English'}
                                         </option>
                                     ))}
                                 </select>
@@ -203,7 +203,7 @@ export default function AdminSettings({ settings, presets, currencies, taxModes,
                                 >
                                     {taxModes.map((m) => (
                                         <option key={m} value={m}>
-                                            {m === 'off' ? 'off — no tax' : m.toUpperCase()}
+                                            {m === 'off' ? 'off: no tax' : m.toUpperCase()}
                                         </option>
                                     ))}
                                 </select>

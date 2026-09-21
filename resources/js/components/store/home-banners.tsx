@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react';
-import { SmartLink } from './site-nav';
+import StoreButton from './store-button';
 
 export interface HomeBanner {
     id: number;
@@ -80,13 +80,10 @@ function BannerButton({ banner, className = '' }: { banner: HomeBanner; classNam
     if (!banner.show_button || !banner.button_label) return null;
 
     return (
-        <SmartLink
-            href={banner.button_link}
-            className={`inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent)] px-7 py-3 text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90 ${className}`}
-        >
+        <StoreButton href={banner.button_link} className={className}>
             {banner.button_label}
             <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-        </SmartLink>
+        </StoreButton>
     );
 }
 

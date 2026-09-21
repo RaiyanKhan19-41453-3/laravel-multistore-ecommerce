@@ -222,7 +222,7 @@ export default function AccountOrderShow({ orderId }: { orderId: number }) {
                                 <div key={shipment.id} className="rounded-md bg-blue-50 p-4 text-sm dark:bg-blue-900/20">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="font-medium text-blue-800 dark:text-blue-300">{shipment.courier ?? '—'}</p>
+                                            <p className="font-medium text-blue-800 dark:text-blue-300">{shipment.courier ?? '-'}</p>
                                             {shipment.tracking_number && (
                                                 <p className="text-blue-700 dark:text-blue-400">
                                                     Tracking: <span className="font-mono">{shipment.tracking_number}</span>

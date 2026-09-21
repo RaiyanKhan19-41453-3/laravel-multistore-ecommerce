@@ -157,7 +157,7 @@ class HomepageService
     }
 
     /**
-     * Embeds must be absolute https URLs — no scripts, no data URIs.
+     * Embeds must be absolute https URLs: no scripts, no data URIs.
      */
     public static function safeEmbedUrl(?string $url): ?string
     {

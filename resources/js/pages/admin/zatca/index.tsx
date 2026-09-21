@@ -81,7 +81,7 @@ export default function ZatcaIndex({
                                 {device ? (
                                     <span className="font-mono">{device.serial}</span>
                                 ) : (
-                                    <span className="text-neutral-500">Not onboarded — run <span className="font-mono">php artisan zatca:onboard</span></span>
+                                    <span className="text-neutral-500">Not onboarded: run <span className="font-mono">php artisan zatca:onboard</span></span>
                                 )}
                             </p>
                             {device && (
@@ -143,7 +143,7 @@ export default function ZatcaIndex({
                                         </td>
                                         <td className="px-4 py-2 tabular-nums">{doc.submit_attempts}</td>
                                         <td className="px-4 py-2 text-neutral-500">
-                                            {doc.submitted_at ? new Date(doc.submitted_at).toLocaleString() : '—'}
+                                            {doc.submitted_at ? new Date(doc.submitted_at).toLocaleString() : '-'}
                                         </td>
                                         <td className="px-4 py-2">
                                             {!['reported', 'cleared'].includes(doc.status) && (

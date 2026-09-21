@@ -16,7 +16,7 @@ class InvoiceService
     ) {}
 
     /**
-     * Build view data for an order invoice. Never throws — QR is best-effort.
+     * Build view data for an order invoice. Never throws: QR is best-effort.
      *
      * @return array{order: Order, lines: Collection, totals: array<string,float>, qrSvg: ?string, qrPayload: ?string, isVat: bool}
      */

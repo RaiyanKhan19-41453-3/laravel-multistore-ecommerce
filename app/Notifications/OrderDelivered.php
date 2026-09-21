@@ -10,7 +10,7 @@ class OrderDelivered extends OrderNotification
     {
         return (new MailMessage)
             ->subject("Order {$this->order->order_number} delivered")
-            ->greeting('Delivered — enjoy!')
+            ->greeting('Delivered, enjoy!')
             ->line("Order {$this->order->order_number} has been delivered. Thanks for shopping with {$this->storeName()}.")
             ->action('View order', $this->orderUrl());
     }

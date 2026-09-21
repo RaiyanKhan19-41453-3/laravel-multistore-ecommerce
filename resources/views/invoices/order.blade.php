@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Invoice {{ $order->order_number }} — {{ $store['name'] }}</title>
+<title>Invoice {{ $order->order_number }} - {{ $store['name'] }}</title>
 <style>
   *{box-sizing:border-box} body{font-family: ui-sans-serif,system-ui, Arial; color:#111; margin:0; padding:24px; font-size:13px}
   .sheet{max-width:800px; margin:0 auto; border:1px solid #e5e7eb; border-radius:16px; overflow:hidden}
@@ -34,7 +34,7 @@
     <div class="right">
       <div class="label">Amount due</div>
       <div style="font-size:20px; font-weight:800">{{ $store['currency'] }} {{ number_format($totals['grand'], 2) }}</div>
-      <div class="meta">{{ $isVat ? 'VAT included' : 'Tax —' }} {{ number_format($totals['tax'], 2) }}</div>
+      <div class="meta">{{ $isVat ? 'VAT included' : 'Tax:' }} {{ number_format($totals['tax'], 2) }}</div>
     </div>
   </div>
 
@@ -53,8 +53,8 @@
     </div>
     <div>
       <div class="label">Payment & Shipping</div>
-      <div>Method: {{ $order->payments->first()?->method ?? '—' }}</div>
-      <div>Shipping: {{ $order->shipping_method_name ?? '—' }} @if($order->shipping_estimated_days) ({{ $order->shipping_estimated_days }} days) @endif</div>
+      <div>Method: {{ $order->payments->first()?->method ?? '-' }}</div>
+      <div>Shipping: {{ $order->shipping_method_name ?? '-' }} @if($order->shipping_estimated_days) ({{ $order->shipping_estimated_days }} days) @endif</div>
       <div>Ship cost: {{ number_format($totals['shipping'], 2) }}</div>
       @if($order->coupon_code)<div>Coupon: {{ $order->coupon_code }} (-{{ number_format($totals['discount'], 2) }})</div>@endif
       @if($order->notes)<div class="meta">Note: {{ $order->notes }}</div>@endif
@@ -87,7 +87,7 @@
   <div class="qr">
     <div style="width:180px; height:180px; background:#fff; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; padding:8px">{!! $qrSvg !!}</div>
     <div>
-      <div class="label">ZATCA QR — TLV Base64</div>
+      <div class="label">ZATCA QR: TLV Base64</div>
       <div style="font-family:monospace; font-size:10px; word-break:break-all; max-width:520px">{{ $qrPayload }}</div>
       <div class="meta">Scan to verify seller, VAT, amount per ZATCA Phase 1.</div>
     </div>

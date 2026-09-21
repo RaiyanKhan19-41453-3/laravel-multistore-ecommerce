@@ -1,7 +1,8 @@
 import StoreLayout from '@/layouts/store-layout';
+import StoreButton from '@/components/store/store-button';
 import { apiStore, getUser, type StoreUser } from '@/lib/auth';
 import { formatPrice } from '@/lib/format';
-import { Link, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { CheckCircle, Package, Search, Tag, Truck } from 'lucide-react';
 
@@ -210,13 +211,9 @@ export default function OrderConfirmation() {
 
                             {lookupError && <p className="text-sm text-red-500">{lookupError}</p>}
 
-                            <button
-                                type="submit"
-                                disabled={lookupBusy}
-                                className="w-full rounded-lg bg-[var(--store-accent)] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                            >
+                            <StoreButton type="submit" disabled={lookupBusy} className="w-full">
                                 {lookupBusy ? 'Looking up...' : 'Find Order'}
-                            </button>
+                            </StoreButton>
                         </form>
                     </div>
                 </div>
@@ -456,12 +453,9 @@ export default function OrderConfirmation() {
 
                 {/* Actions */}
                 <div className="flex justify-center gap-4">
-                    <Link
-                        href="/products"
-                        className="rounded-lg bg-[var(--store-accent)] px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-                    >
+                    <StoreButton href="/products">
                         Continue shopping
-                    </Link>
+                    </StoreButton>
                     <button
                         type="button"
                         onClick={() => {

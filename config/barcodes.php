@@ -25,9 +25,9 @@ return [
     | 50x30mm labels for XPrinter-style thermal printers, one per row.
     */
     'layouts' => [
-        'a4-24' => ['label' => 'A4 — 24 per sheet (3 × 8)', 'columns' => 3, 'kind' => 'a4'],
-        'a4-40' => ['label' => 'A4 — 40 per sheet (4 × 10)', 'columns' => 4, 'kind' => 'a4'],
-        'a4-65' => ['label' => 'A4 — 65 per sheet (5 × 13)', 'columns' => 5, 'kind' => 'a4'],
+        'a4-24' => ['label' => 'A4: 24 per sheet (3 × 8)', 'columns' => 3, 'kind' => 'a4'],
+        'a4-40' => ['label' => 'A4: 40 per sheet (4 × 10)', 'columns' => 4, 'kind' => 'a4'],
+        'a4-65' => ['label' => 'A4: 65 per sheet (5 × 13)', 'columns' => 5, 'kind' => 'a4'],
         'thermal-50x30' => ['label' => 'Thermal 50×30mm', 'columns' => 1, 'kind' => 'thermal'],
     ],
 

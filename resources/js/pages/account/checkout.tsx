@@ -1,4 +1,5 @@
 import StoreLayout from '@/layouts/store-layout';
+import StoreButton from '@/components/store/store-button';
 import { apiStore, getUser } from '@/lib/auth';
 import { formatPrice } from '@/lib/format';
 import type { CartSummary } from '@/types';
@@ -314,12 +315,9 @@ export default function Checkout() {
                 <div className="mx-auto max-w-4xl px-4 py-12 text-center">
                     <h1 className="mb-4 text-2xl font-bold">Your cart is empty</h1>
                     <p className="mb-6 text-[var(--store-muted)]">Add some items before checking out.</p>
-                    <Link
-                        href="/products"
-                        className="inline-block rounded-lg bg-[var(--store-accent)] px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-                    >
+                    <StoreButton href="/products">
                         Browse products
-                    </Link>
+                    </StoreButton>
                 </div>
             </StoreLayout>
         );
@@ -364,7 +362,7 @@ export default function Checkout() {
                     <div className="grid gap-8 lg:grid-cols-3">
                         {/* Shipping & Payment */}
                         <div className="space-y-6 lg:col-span-2">
-                            {/* Contact Information — guests only */}
+                            {/* Contact Information: guests only */}
                             {!user && (
                                 <section className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
                                     <h2 className="mb-4 text-lg font-semibold">Contact Information</h2>
@@ -699,13 +697,9 @@ export default function Checkout() {
                                     </div>
                                 </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="mt-5 block w-full rounded-lg bg-[var(--store-accent)] py-3 text-center text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-none disabled:opacity-50"
-                                >
+                                <StoreButton type="submit" disabled={submitting} className="mt-5 w-full">
                                     {submitting ? 'Placing order...' : 'Place Order'}
-                                </button>
+                                </StoreButton>
 
                                 <Link
                                     href="/cart"

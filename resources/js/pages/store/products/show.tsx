@@ -1,13 +1,14 @@
 import Price from '@/components/store/price';
 import QuantityStepper from '@/components/store/quantity-stepper';
 import StarRating from '@/components/store/star-rating';
+import StoreButton from '@/components/store/store-button';
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore } from '@/lib/auth';
 import { formatPrice } from '@/lib/format';
 import { useT } from '@/lib/store';
 import type { ProductDetail, ProductVariant, Review, ReviewSummary } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { Check, Heart, RotateCcw, ShieldCheck, ShoppingBag, Truck } from 'lucide-react';
+import { Banknote, Check, Heart, MapPin, RotateCcw, ShieldCheck, ShoppingBag, Truck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 function findVariant(variants: ProductVariant[], selected: Record<number, number>): ProductVariant | null {
@@ -28,11 +29,9 @@ function findVariant(variants: ProductVariant[], selected: Record<number, number
     );
 }
 
-export default function ProductShow({ slug }: { slug: string }) {
+export default function ProductShow({ slug, product: initialProduct }: { slug: string; product: ProductDetail | null }) {
     const t = useT();
-    const [product, setProduct] = useState<ProductDetail | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [product] = useState<ProductDetail | null>(initialProduct);
     const [selected, setSelected] = useState<Record<number, number>>({});
     const [quantity, setQuantity] = useState(1);
     const [adding, setAdding] = useState(false);
@@ -51,27 +50,6 @@ export default function ProductShow({ slug }: { slug: string }) {
     const [reviewBody, setReviewBody] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
     const [reviewNotice, setReviewNotice] = useState<string | null>(null);
-
-    useEffect(() => {
-        setLoading(true);
-        setError(null);
-        setSelected({});
-        setQuantity(1);
-        setNotice(null);
-        setSelectedImage(null);
-
-        void fetch(`/api/products/${slug}`)
-            .then((r) => {
-                if (!r.ok) throw new Error('not found');
-                return r.json();
-            })
-            .then((json: { success: boolean; data: ProductDetail }) => {
-                if (json.success) setProduct(json.data);
-                else setError('Product not found.');
-            })
-            .catch(() => setError('Product not found.'))
-            .finally(() => setLoading(false));
-    }, [slug]);
 
     // Load reviews
     useEffect(() => {
@@ -193,19 +171,11 @@ export default function ProductShow({ slug }: { slug: string }) {
             });
     };
 
-    if (loading) {
-        return (
-            <StoreLayout title="Product">
-                <div className="store-container py-12 text-[var(--store-muted)]">{t('store.loading')}</div>
-            </StoreLayout>
-        );
-    }
-
-    if (error || !product) {
+    if (!product) {
         return (
             <StoreLayout title="Product">
                 <div className="store-container py-12">
-                    <p className="text-[var(--store-muted)]">{error ?? 'Product not found.'}</p>
+                    <p className="text-[var(--store-muted)]">Product not found.</p>
                     <Link href="/" className="mt-2 inline-block text-sm text-[var(--store-accent)] hover:underline">
                         {t('store.back_to_home')}
                     </Link>
@@ -220,7 +190,13 @@ export default function ProductShow({ slug }: { slug: string }) {
                 <title>{product.name}</title>
                 {product.short_description && <meta name="description" content={product.short_description} />}
                 <meta property="og:title" content={product.name} />
-                {product.primary_image && <meta property="og:image" content={product.primary_image} />}
+                {product.short_description && <meta property="og:description" content={product.short_description} />}
+                {product.primary_image && (
+                    <meta
+                        property="og:image"
+                        content={product.primary_image.startsWith('http') ? product.primary_image : `${window.location.origin}${product.primary_image}`}
+                    />
+                )}
                 <meta property="og:type" content="product" />
                 <script
                     type="application/ld+json"
@@ -280,7 +256,7 @@ export default function ProductShow({ slug }: { slug: string }) {
                                 <div className="flex h-full w-full items-center justify-center text-[var(--store-muted)]">No image</div>
                             )}
                             {activeDiscount && (
-                                <span className="absolute top-4 start-4 rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white shadow">
+                                <span className="absolute top-4 start-4 rounded-lg bg-[var(--store-deal)] px-3 py-1 text-xs font-bold text-white shadow">
                                     {activeDiscount.type === 'percentage'
                                         ? `${activeDiscount.value}% ${t('store.sale_badge')}`
                                         : `${formatPrice(activeDiscount.value)} ${t('store.sale_badge')}`}
@@ -388,15 +364,10 @@ export default function ProductShow({ slug }: { slug: string }) {
 
                         <div className="mt-6 flex flex-wrap items-center gap-3">
                             <QuantityStepper value={quantity} min={1} max={Math.max(stock, 1)} onChange={setQuantity} />
-                            <button
-                                type="button"
-                                onClick={addToCart}
-                                disabled={adding || stock <= 0}
-                                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--store-accent)] px-6 py-3 text-sm font-bold text-[var(--store-accent-ink)] shadow transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-none disabled:opacity-50"
-                            >
+                            <StoreButton onClick={addToCart} disabled={adding || stock <= 0} className="flex-1">
                                 <ShoppingBag className="h-4 w-4" />
                                 {adding ? '...' : t('store.add_to_cart')}
-                            </button>
+                            </StoreButton>
                             <button
                                 type="button"
                                 onClick={toggleWishlist}
@@ -430,6 +401,21 @@ export default function ProductShow({ slug }: { slug: string }) {
                                     <span className="text-[11px] font-semibold text-[var(--store-muted)]">{perk.label}</span>
                                 </div>
                             ))}
+                        </div>
+
+                        {/* Delivery promise (Daraz-style) */}
+                        <div className="mt-4 rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-4 text-sm">
+                            <p className="flex items-start gap-2.5">
+                                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--store-accent)]" />
+                                <span>
+                                    <span className="font-bold">{t('store.delivery_title')}</span>
+                                    <span className="text-[var(--store-muted)]">: {t('store.delivery_window')}</span>
+                                </span>
+                            </p>
+                            <p className="mt-2.5 flex items-start gap-2.5 border-t border-[var(--store-border)] pt-2.5">
+                                <Banknote className="mt-0.5 h-4 w-4 shrink-0 text-[var(--store-accent)]" />
+                                <span className="font-semibold text-[var(--store-success)]">{t('store.cod_note')}</span>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -475,14 +461,13 @@ export default function ProductShow({ slug }: { slug: string }) {
                                     className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--store-accent)]"
                                 />
                             </div>
-                            <button
-                                type="button"
+                            <StoreButton
                                 onClick={submitReview}
                                 disabled={submittingReview}
-                                className="rounded-lg bg-[var(--store-accent)] px-6 py-2.5 text-sm font-bold text-[var(--store-accent-ink)] transition hover:opacity-90 disabled:opacity-50"
+                                size="sm"
                             >
                                 {submittingReview ? '...' : t('store.submit_review')}
-                            </button>
+                            </StoreButton>
                             {reviewNotice && (
                                 <p className={`mt-3 text-sm font-medium ${reviewNotice.includes('submitted') ? 'text-[var(--store-success)]' : 'text-red-600 dark:text-red-400'}`}>
                                     {reviewNotice}

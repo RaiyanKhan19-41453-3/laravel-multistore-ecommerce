@@ -358,7 +358,7 @@ export default function ShippingIndex({ methods, zones, rates }: { methods: Ship
                                             <td className="px-4 py-2">{rate.shipping_method.name}</td>
                                             <td className="px-4 py-2">{rate.shipping_zone.name}</td>
                                             <td className="px-4 py-2">{formatPrice(rate.price)}</td>
-                                            <td className="px-4 py-2">{rate.free_shipping_min ? formatPrice(rate.free_shipping_min) : '—'}</td>
+                                            <td className="px-4 py-2">{rate.free_shipping_min ? formatPrice(rate.free_shipping_min) : '-'}</td>
                                             <td className="px-4 py-2">
                                                 <button onClick={() => setEditRate(rate)} className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800">
                                                     <Pencil className="h-4 w-4" />

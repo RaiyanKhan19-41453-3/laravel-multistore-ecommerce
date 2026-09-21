@@ -13,7 +13,7 @@ use Illuminate\Validation\Rules\Exists;
 /**
  * The merchant whose data the current admin request manages.
  *
- * Null selection means the platform-wide view (all stores) — today's
+ * Null selection means the platform-wide view (all stores): today's
  * behavior, kept for super-admins and staff without store memberships.
  * An explicit selection scopes admin listings and directs creations,
  * validation, and settings reads/writes at that store.

@@ -1,7 +1,9 @@
 import Heading from '@/components/heading';
+import StoreLogo from '@/components/store/store-logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -12,18 +14,22 @@ interface StoreProfile {
     name: string;
     tagline: string | null;
     logo: string | null;
+    show_store_name: boolean;
     email: string | null;
     phone: string | null;
     address: string | null;
     city: string | null;
     meta_title: string | null;
     meta_description: string | null;
-    theme_color: string | null;
     favicon: string | null;
     og_image: string | null;
     google_tag_id: string | null;
     google_site_verification: string | null;
     meta_pixel_id: string | null;
+    twitter_handle: string | null;
+    twitter_card: string | null;
+    og_image_alt: string | null;
+    robots_noindex: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -96,22 +102,27 @@ function BrandFile({
 }
 
 export default function StoreProfileIndex({ profile }: { profile: StoreProfile }) {
-    const { data, setData, put, errors, processing } = useForm({
+    const { data, setData, post, errors, processing } = useForm({
         name: profile.name,
         tagline: profile.tagline ?? '',
+        show_store_name: profile.show_store_name ?? true,
         email: profile.email ?? '',
         phone: profile.phone ?? '',
         address: profile.address ?? '',
         city: profile.city ?? '',
         meta_title: profile.meta_title ?? '',
-        meta_description: profile.meta_description ?? '',
-        theme_color: profile.theme_color ?? '#006a4e',
-        google_tag_id: profile.google_tag_id ?? '',
+                                        meta_description: profile.meta_description ?? '',
+                                        google_tag_id: profile.google_tag_id ?? '',
         google_site_verification: profile.google_site_verification ?? '',
-        meta_pixel_id: profile.meta_pixel_id ?? '',
+                                        meta_pixel_id: profile.meta_pixel_id ?? '',
+                                        twitter_handle: profile.twitter_handle ?? '',
+                                        twitter_card: profile.twitter_card ?? 'summary_large_image',
+                                        og_image_alt: profile.og_image_alt ?? '',
+                                        robots_noindex: profile.robots_noindex ?? false,
         logo_file: null as File | null,
         favicon_file: null as File | null,
         og_image_file: null as File | null,
+        _method: 'PUT',
     });
     const [fileKey, setFileKey] = useState(0);
     const [removing, setRemoving] = useState<string | null>(null);
@@ -125,7 +136,9 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(route('admin.store-profile.update'), { onSuccess: clearFiles });
+        // POST with spoofed PUT: PHP discards multipart bodies on real
+        // PUT/PATCH requests, so uploads would never arrive otherwise.
+        post(route('admin.store-profile.update'), { onSuccess: clearFiles });
     };
 
     const removeFile = (removeKey: 'remove_logo' | 'remove_favicon' | 'remove_og_image', label: string) => {
@@ -138,7 +151,7 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Store Profile" />
             <div className="flex flex-col gap-6 p-4">
-                <Heading title="Store Profile" description="Your store's public identity — logo, contact, favicon, and the meta tags search engines and social apps see." />
+                <Heading title="Store Profile" description="Your store's public identity: logo, contact, favicon, and the meta tags search engines and social apps see." />
 
                 <form onSubmit={submit} className="max-w-2xl space-y-5 rounded-xl border p-5">
                     <BrandFile
@@ -157,6 +170,33 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                         <Label htmlFor="profile-name">Store name</Label>
                         <Input id="profile-name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="My Store" />
                         {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
+                    </div>
+
+                            <div className="grid gap-2">
+                                <Label>Header preview</Label>
+                                <div
+                                    className="flex items-center justify-center gap-2.5 rounded-xl bg-[#0e7a3d] px-4 py-3 text-white"
+                                >
+                            <StoreLogo size="md" />
+                            {data.show_store_name && (
+                                <span className="text-[22px] leading-none font-bold tracking-tight">{data.name || 'My Store'}</span>
+                            )}
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                            How the logo and name look in the storefront header. Upload a logo above to replace the default mark.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+                        <div>
+                            <Label htmlFor="profile-show-store-name">Show store name</Label>
+                            <p className="text-muted-foreground text-xs">Display the name beside the logo in the storefront header.</p>
+                        </div>
+                        <Switch
+                            id="profile-show-store-name"
+                            checked={data.show_store_name}
+                            onCheckedChange={(checked) => setData('show_store_name', checked)}
+                        />
                     </div>
 
                     <div className="grid gap-2">
@@ -202,10 +242,10 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                                     id="profile-meta-title"
                                     value={data.meta_title}
                                     onChange={(e) => setData('meta_title', e.target.value)}
-                                    placeholder="My Store — quality products online"
+                                    placeholder="My Store: quality products online"
                                     maxLength={255}
                                 />
-                                <p className="text-muted-foreground text-xs">{data.meta_title.length}/255 — aim under 60 characters.</p>
+                                <p className="text-muted-foreground text-xs">{data.meta_title.length}/255: aim under 60 characters.</p>
                             </div>
 
                             <div className="grid gap-2">
@@ -218,23 +258,7 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                                     rows={3}
                                     maxLength={500}
                                 />
-                                <p className="text-muted-foreground text-xs">{data.meta_description.length}/500 — aim under 160 characters.</p>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="profile-theme-color">Theme color</Label>
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        id="profile-theme-color"
-                                        type="color"
-                                        value={/^#[0-9a-fA-F]{6}$/.test(data.theme_color) ? data.theme_color : '#006a4e'}
-                                        onChange={(e) => setData('theme_color', e.target.value)}
-                                        className="h-10 w-14 cursor-pointer rounded-md border bg-white p-1"
-                                    />
-                                    <Input value={data.theme_color} onChange={(e) => setData('theme_color', e.target.value)} placeholder="#006a4e" dir="ltr" className="max-w-32" />
-                                </div>
-                                {errors.theme_color && <p className="text-destructive text-xs">{errors.theme_color}</p>}
-                                <p className="text-muted-foreground text-xs">Browser chrome color on mobile.</p>
+                                <p className="text-muted-foreground text-xs">{data.meta_description.length}/500: aim under 160 characters.</p>
                             </div>
 
                             <BrandFile
@@ -250,7 +274,7 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                             />
 
                             <BrandFile
-                                label="Default share image"
+                                label="OG image"
                                 current={profile.og_image}
                                 accept="image/jpeg,image/png,image/webp"
                                 hint="JPEG, PNG or WebP up to 2MB. Shown when sharing links without their own image (1200×630 ideal)."
@@ -260,6 +284,44 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                                 onRemove={() => removeFile('remove_og_image', 'share image')}
                                 removing={removing === 'remove_og_image'}
                             />
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="profile-og-alt">Share image alt text</Label>
+                                <Input
+                                    id="profile-og-alt"
+                                    value={data.og_image_alt}
+                                    onChange={(e) => setData('og_image_alt', e.target.value)}
+                                    placeholder="Front of the store on opening day"
+                                    maxLength={255}
+                                />
+                                {errors.og_image_alt && <p className="text-destructive text-xs">{errors.og_image_alt}</p>}
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="profile-twitter-card">X card layout</Label>
+                                <select
+                                    id="profile-twitter-card"
+                                    value={data.twitter_card}
+                                    onChange={(e) => setData('twitter_card', e.target.value)}
+                                    className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                                >
+                                    <option value="summary_large_image">Large image</option>
+                                    <option value="summary">Compact summary</option>
+                                </select>
+                                {errors.twitter_card && <p className="text-destructive text-xs">{errors.twitter_card}</p>}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+                                <div>
+                                    <Label htmlFor="profile-robots-noindex">Hide from search engines</Label>
+                                    <p className="text-muted-foreground text-xs">Adds a noindex tag. Useful for demo or staging shops.</p>
+                                </div>
+                                <Switch
+                                    id="profile-robots-noindex"
+                                    checked={data.robots_noindex}
+                                    onCheckedChange={(checked) => setData('robots_noindex', checked)}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -304,6 +366,19 @@ export default function StoreProfileIndex({ profile }: { profile: StoreProfile }
                                 />
                                 {errors.meta_pixel_id && <p className="text-destructive text-xs">{errors.meta_pixel_id}</p>}
                                 <p className="text-muted-foreground text-xs">Fires PageView on every page.</p>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="profile-twitter">X (Twitter) handle</Label>
+                                <Input
+                                    id="profile-twitter"
+                                    value={data.twitter_handle}
+                                    onChange={(e) => setData('twitter_handle', e.target.value)}
+                                    placeholder="@shop"
+                                    dir="ltr"
+                                />
+                                {errors.twitter_handle && <p className="text-destructive text-xs">{errors.twitter_handle}</p>}
+                                <p className="text-muted-foreground text-xs">Shown as the card author, e.g. @shop.</p>
                             </div>
                         </div>
                     </div>

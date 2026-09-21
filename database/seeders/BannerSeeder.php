@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Demo homepage banners showcasing all three image layouts.
- * Idempotent — safe to re-run.
+ * Idempotent: safe to re-run.
  *
  * Run with: php artisan db:seed --class=BannerSeeder
  */
@@ -21,7 +21,7 @@ class BannerSeeder extends Seeder
         $banners = [
             [
                 'title' => 'New season essentials',
-                'subtitle' => 'Fresh picks across clothing, shoes, and accessories — curated for the week.',
+                'subtitle' => 'Fresh picks across clothing, shoes, and accessories, curated for the week.',
                 'button_label' => 'Shop all',
                 'button_link' => '/products',
                 'layout' => 'double',

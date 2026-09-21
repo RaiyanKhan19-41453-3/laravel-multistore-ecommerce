@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\Api\CategoryController;
 use App\Services\CurrencyService;
+use App\Services\MenuService;
 use App\Services\SettingsService;
 use App\Support\AdminStoreContext;
 use App\Support\CurrentStore;
@@ -48,7 +50,7 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
-                'permissions' => $request->user() && $request->is('admin/*')
+                'permissions' => $request->user() && ($request->is('admin/*') || $request->is('settings/*'))
                     ? $request->user()->getAllPermissions()->pluck('name')->all()
                     : [],
             ],
@@ -56,6 +58,7 @@ class HandleInertiaRequests extends Middleware
             'direction' => $this->direction(),
             'store' => $this->storeData(),
             'adminStore' => $this->adminStoreData($request),
+            'nav' => $request->is('admin*') ? ['menus' => [], 'categories' => []] : $this->storefrontNav(),
         ]);
     }
 
@@ -86,9 +89,10 @@ class HandleInertiaRequests extends Middleware
             return [
                 'id' => (string) ($store?->id ?? ''),
                 'slug' => (string) ($store?->slug ?? ''),
-                'name' => (string) ($settings->get('store.name') ?? $store?->name ?? config('store.name', config('app.name'))),
+                'name' => (string) ($settings->get('store.name') ?? $store?->name ?? config('store.name', 'My Store')),
                 'tagline' => (string) ($settings->get('store.tagline') ?? ''),
                 'logo' => (string) ($settings->get('store.logo') ?? ''),
+                'show_store_name' => $settings->get('store.show_store_name', '1') !== '0',
                 'email' => (string) ($settings->get('store.email') ?? ''),
                 'phone' => (string) ($settings->get('store.phone') ?? ''),
                 'address' => (string) ($settings->get('store.address') ?? ''),
@@ -100,13 +104,41 @@ class HandleInertiaRequests extends Middleware
             ];
         } catch (\Throwable) {
             return [
-                'name' => (string) config('store.name', config('app.name')),
+                'name' => (string) config('store.name', 'My Store'),
+                'show_store_name' => true,
                 'country' => (string) config('store.country', 'BD'),
                 'currency' => (string) config('store.currency', 'BDT'),
                 'currencySymbol' => '৳',
                 'locale' => app()->getLocale(),
             ];
         }
+    }
+
+    /**
+     * Header navigation for storefront pages, shared so first paint is
+     * complete instead of fetching menus after load. Skipped for admin
+     * routes at the call site.
+     *
+     * @return array{menus: array<int, mixed>, categories: array<int, mixed>}
+     */
+    private function storefrontNav(): array
+    {
+        try {
+            $menus = app(MenuService::class)->tree();
+        } catch (\Throwable) {
+            $menus = [];
+        }
+
+        try {
+            $response = app(CategoryController::class)->index();
+            /** @var array<string, mixed> $decoded */
+            $decoded = $response->getData(true);
+            $categories = array_slice($decoded['data'] ?? [], 0, 10);
+        } catch (\Throwable) {
+            $categories = [];
+        }
+
+        return ['menus' => $menus, 'categories' => $categories];
     }
 
     /**

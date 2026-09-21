@@ -94,7 +94,7 @@ export default function MenusIndex({ items, targets }: { items: MenuNode[]; targ
             <Head title="Menus" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex items-center justify-between">
-                    <Heading title="Menus" description="Manage the storefront header navigation — dropdowns, mega menus, and click behavior." />
+                    <Heading title="Menus" description="Manage the storefront header navigation: dropdowns, mega menus, and click behavior." />
                     <Button onClick={() => openCreate()}>
                         <Plus className="mr-1 h-4 w-4" /> Add Menu Item
                     </Button>
@@ -127,8 +127,8 @@ export default function MenusIndex({ items, targets }: { items: MenuNode[]; targ
                                             <span className="bg-muted mr-1.5 rounded px-1.5 py-0.5 font-medium">{node.type}</span>
                                             <span className="font-mono">{node.type === 'url' ? node.url : `#${node.reference_id}`}</span>
                                         </td>
-                                        <td className="px-3 py-2 text-xs">{(node.children ?? []).length > 0 ? node.click_behavior : '—'}</td>
-                                        <td className="px-3 py-2 text-xs">{(node.children ?? []).length > 0 ? node.display : '—'}</td>
+                                        <td className="px-3 py-2 text-xs">{(node.children ?? []).length > 0 ? node.click_behavior : '-'}</td>
+                                        <td className="px-3 py-2 text-xs">{(node.children ?? []).length > 0 ? node.display : '-'}</td>
                                         <td className="px-3 py-2">
                                             <button
                                                 type="button"
@@ -238,7 +238,7 @@ function MenuDialog({
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>{editing ? `Edit — ${editing.title}` : presetParent ? 'Add Submenu Item' : 'Add Menu Item'}</DialogTitle>
+                    <DialogTitle>{editing ? `Edit: ${editing.title}` : presetParent ? 'Add Submenu Item' : 'Add Menu Item'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-4">
                     <div className="grid gap-1.5">

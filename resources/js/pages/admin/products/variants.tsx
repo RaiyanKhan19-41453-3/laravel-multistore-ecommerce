@@ -190,7 +190,7 @@ export default function ProductVariants({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Variants — ${product.name}`} />
+            <Head title={`Variants: ${product.name}`} />
 
             <div className="flex h-full flex-1 flex-col gap-6 p-6">
                 <div className="flex items-center justify-between">

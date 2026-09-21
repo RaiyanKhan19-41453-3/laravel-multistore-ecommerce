@@ -156,7 +156,7 @@ class DashboardService
             ->get()
             ->map(fn ($row) => [
                 'product_id' => $row->product_id,
-                'name' => $row->product?->name ?? '—',
+                'name' => $row->product?->name ?? '-',
                 'slug' => $row->product?->slug,
                 'total_qty' => (int) $row->total_qty,
                 'total_revenue' => (float) $row->total_revenue,
@@ -182,7 +182,7 @@ class DashboardService
                 'id' => $inv->id,
                 'product_id' => $inv->product_id,
                 'variant_id' => $inv->product_variant_id,
-                'product_name' => $inv->product?->name ?? '—',
+                'product_name' => $inv->product?->name ?? '-',
                 'variant_name' => $inv->productVariant?->name,
                 'quantity' => $inv->quantity,
                 'reserved' => $inv->reserved_quantity,

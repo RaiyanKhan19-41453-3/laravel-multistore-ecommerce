@@ -1,4 +1,5 @@
 import StoreLayout from '@/layouts/store-layout';
+import StoreButton from '@/components/store/store-button';
 import { apiStore, setAuth, type StoreUser } from '@/lib/auth';
 import { getGuestToken } from '@/lib/guest-token';
 import { useT } from '@/lib/store';
@@ -145,13 +146,9 @@ export default function StoreRegister() {
                         />
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={busy}
-                        className="rounded-lg bg-[var(--store-accent)] px-4 py-3 text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-none disabled:opacity-50"
-                    >
+                    <StoreButton type="submit" disabled={busy} className="w-full">
                         {busy ? 'Creating account...' : t('store.register')}
-                    </button>
+                    </StoreButton>
                 </form>
 
                 <p className="mt-6 text-center text-sm text-[var(--store-muted)]">

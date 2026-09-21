@@ -34,7 +34,7 @@ export default function ReportsIndex({ filters, totals, salesDaily, byPayment, b
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Reports" />
             <div className="flex flex-col gap-6 p-4">
-                <Heading title="Reports" description="Sales, VAT, coupons, shipping & payments — filter by date and export CSV for accounting." />
+                <Heading title="Reports" description="Sales, VAT, coupons, shipping and payments: filter by date and export CSV for accounting." />
 
                 <div className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
                     <div className="grid gap-1">
@@ -122,7 +122,7 @@ export default function ReportsIndex({ filters, totals, salesDaily, byPayment, b
                         </div>
                         <div className="mt-3 space-y-2">
                             {byPayment.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">—</p>
+                                        <p className="text-muted-foreground text-sm">-</p>
                             ) : (
                                 byPayment.map((r) => (
                                     <div key={r.method} className="flex justify-between text-sm">
@@ -144,11 +144,11 @@ export default function ReportsIndex({ filters, totals, salesDaily, byPayment, b
                         </div>
                         <div className="mt-3 space-y-2">
                             {byShipping.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">—</p>
+                                        <p className="text-muted-foreground text-sm">-</p>
                             ) : (
                                 byShipping.map((r, i) => (
                                     <div key={i} className="flex justify-between text-sm">
-                                        <span>{r.shipping_method_name ?? '—'}</span>
+                                        <span>{r.shipping_method_name ?? '-'}</span>
                                         <span>
                                             {r.orders} · {formatPrice(Number(r.shipping_revenue))}
                                         </span>
@@ -183,7 +183,7 @@ export default function ReportsIndex({ filters, totals, salesDaily, byPayment, b
 
                 <div className="rounded-xl border bg-amber-50 p-4 text-sm dark:bg-amber-950/20">
                     <p className="font-semibold">VAT export</p>
-                    <p className="text-muted-foreground">ZATCA-ready line-item VAT by order — for your accountant.</p>
+                    <p className="text-muted-foreground">ZATCA-ready line-item VAT by order, for your accountant.</p>
                     <a
                         href={exportUrl('vat')}
                         className="bg-primary text-primary-foreground mt-2 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm"

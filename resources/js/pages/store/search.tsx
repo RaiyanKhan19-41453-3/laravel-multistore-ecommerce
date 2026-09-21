@@ -58,7 +58,7 @@ export default function StoreSearch() {
     return (
         <StoreLayout title={t('store.search')}>
             <Head>
-                <title>{query ? `${query} — ${t('store.search')}` : t('store.search')}</title>
+                <title>{query ? `${query} - ${t('store.search')}` : t('store.search')}</title>
             </Head>
 
             <div className="store-container py-8">
@@ -88,7 +88,7 @@ export default function StoreSearch() {
                         <p className="mb-4 text-sm text-[var(--store-muted)]">
                             {products.total} result{products.total !== 1 ? 's' : ''} for &quot;{query}&quot;
                         </p>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
                             {products.data.map((product) => (
                                 <ProductCard key={product.id} product={product} />
                             ))}

@@ -37,7 +37,7 @@ it('decodes back to the five ordered tags', function () {
 it('measures length in bytes for multibyte values', function () {
     $raw = base64_decode((new ZatcaQrService)->base64([1 => 'شركة المثال']));
 
-    // 11 characters but 21 UTF-8 bytes — ZATCA requires byte length.
+    // 11 characters but 21 UTF-8 bytes: ZATCA requires byte length.
     expect(ord($raw[1]))->toBe(21);
 });
 

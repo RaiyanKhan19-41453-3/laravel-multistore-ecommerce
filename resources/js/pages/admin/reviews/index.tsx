@@ -93,7 +93,7 @@ export default function ReviewsIndex({ reviews, filters }: { reviews: PaginatedD
                                             {'★'.repeat(review.rating)}
                                             {'☆'.repeat(5 - review.rating)}
                                         </td>
-                                        <td className="px-3 py-2">{review.title ?? '—'}</td>
+                                        <td className="px-3 py-2">{review.title ?? '-'}</td>
                                         <td className="px-3 py-2">
                                             <span
                                                 className={`rounded-full px-2 py-0.5 text-xs ${review.is_approved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}

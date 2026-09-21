@@ -42,7 +42,7 @@ export default function CustomerShow({ customer, orders, addresses }: Props) {
             <div className="flex flex-col gap-6 p-4">
                 <Heading
                     title={customer.name}
-                    description={`${customer.email} · ${customer.phone ?? '—'} · ${customer.orders_count} orders · spent ${formatPrice(Number(customer.total_spent ?? 0))}`}
+                    description={`${customer.email} · ${customer.phone ?? '-'} · ${customer.orders_count} orders · spent ${formatPrice(Number(customer.total_spent ?? 0))}`}
                 />
 
                 <div className="grid gap-6 lg:grid-cols-2">

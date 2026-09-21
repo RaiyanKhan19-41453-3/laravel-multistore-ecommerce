@@ -263,7 +263,7 @@ export default function StoreProducts() {
                                 <p className="text-[var(--store-muted)]">{t('store.no_products')}</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
                                 {products.data.map((product) => (
                                     <ProductCard key={product.id} product={product} />
                                 ))}

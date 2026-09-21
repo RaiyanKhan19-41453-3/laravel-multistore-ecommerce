@@ -46,7 +46,7 @@ export default function InvoicePage({ order, lines, totals, qrSvg, qrPayload, is
                     <div>
                         <h1 className="text-xl font-bold">Invoice {order.order_number}</h1>
                         <p className="text-muted-foreground text-sm">
-                            {order.status} · {order.created_at ? new Date(order.created_at).toLocaleString() : '—'} · {store.name}
+                            {order.status} · {order.created_at ? new Date(order.created_at).toLocaleString() : '-'} · {store.name}
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -75,10 +75,10 @@ export default function InvoicePage({ order, lines, totals, qrSvg, qrPayload, is
                         </div>
                         <div className="text-sm md:text-right">
                             <p>
-                                <span className="text-muted-foreground">Shipping:</span> {order.shipping_method_name ?? '—'}
+                                <span className="text-muted-foreground">Shipping:</span> {order.shipping_method_name ?? '-'}
                             </p>
                             <p>
-                                <span className="text-muted-foreground">Coupon:</span> {order.coupon_code ?? '—'}
+                                <span className="text-muted-foreground">Coupon:</span> {order.coupon_code ?? '-'}
                             </p>
                             {order.notes && <p className="text-muted-foreground">Note: {order.notes}</p>}
                         </div>
@@ -150,7 +150,7 @@ export default function InvoicePage({ order, lines, totals, qrSvg, qrPayload, is
                 </div>
 
                 <div className="overflow-hidden rounded-xl border bg-white">
-                    <div className="text-muted-foreground p-2 text-right text-xs">Preview — use Download PDF / Print for exact paper layout</div>
+                    <div className="text-muted-foreground p-2 text-right text-xs">Preview: use Download PDF / Print for exact paper layout</div>
                     <iframe src={htmlUrl} title="Printable invoice" className="h-[900px] w-full border-0" />
                 </div>
             </div>

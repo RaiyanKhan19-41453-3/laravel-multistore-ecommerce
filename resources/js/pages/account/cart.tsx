@@ -1,5 +1,7 @@
 import ProductImage from '@/components/store/product-image';
+import PayBadges from '@/components/store/pay-badges';
 import QuantityStepper from '@/components/store/quantity-stepper';
+import StoreButton from '@/components/store/store-button';
 import StoreLayout from '@/layouts/store-layout';
 import { apiStore } from '@/lib/auth';
 import { formatPrice } from '@/lib/format';
@@ -8,6 +10,13 @@ import type { CartDiscount, CartSummary, ItemDiscount } from '@/types';
 import { Link } from '@inertiajs/react';
 import { ArrowRight, Check, ShoppingBag, Tag, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+
+const PAY_BADGE_METHODS = [
+    { value: 'bkash', label: 'bKash' },
+    { value: 'nagad', label: 'Nagad' },
+    { value: 'rocket', label: 'Rocket' },
+    { value: 'cod', label: 'COD' },
+];
 
 function levelTag(d: CartDiscount | ItemDiscount): string {
     switch (d.level) {
@@ -107,13 +116,10 @@ export default function StoreCart() {
                     </span>
                     <h1 className="mt-6 text-2xl font-bold tracking-tight">{t('store.cart_empty_title')}</h1>
                     <p className="mt-2 text-[var(--store-muted)]">{t('store.cart_empty_text')}</p>
-                    <Link
-                        href="/products"
-                        className="mt-7 inline-flex items-center gap-2 rounded-lg bg-[var(--store-accent)] px-7 py-3 text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90"
-                    >
+                    <StoreButton href="/products" size="lg" className="mt-7">
                         {t('store.continue_shopping')}
                         <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                    </Link>
+                    </StoreButton>
                 </div>
             </StoreLayout>
         );
@@ -298,13 +304,15 @@ export default function StoreCart() {
                                 )}
                             </div>
 
-                            <Link
-                                href="/checkout"
-                                className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--store-accent)] py-3 text-center text-sm font-bold text-[var(--store-accent-ink)] transition hover:-translate-y-0.5 hover:opacity-90"
-                            >
+                            <StoreButton href="/checkout" className="mt-5 w-full">
                                 {t('store.proceed_checkout')}
                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                            </Link>
+                            </StoreButton>
+
+                            <div className="mt-3 flex flex-col items-center gap-2 border-t border-[var(--store-border)] pt-3">
+                                <PayBadges methods={PAY_BADGE_METHODS} />
+                                <p className="text-[11px] font-medium text-[var(--store-muted)]">{t('store.cod_note')}</p>
+                            </div>
                         </div>
                     </div>
                 </div>

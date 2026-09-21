@@ -68,7 +68,7 @@ return new class extends Migration
 
                 if (! $defaultId) {
                     $defaultId = DB::table('stores')->insertGetId([
-                        'name' => config('store.name', config('app.name', 'Default Store')),
+                        'name' => config('store.name', 'My Store'),
                         'slug' => 'default',
                         'country' => config('store.country', 'BD'),
                         'currency' => config('store.currency', 'BDT'),

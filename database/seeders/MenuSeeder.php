@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Demo storefront navigation: one mega menu, one small dropdown,
- * plus plain links. Idempotent — safe to re-run.
+ * plus plain links. Idempotent: safe to re-run.
  *
  * Run with: php artisan db:seed --class=MenuSeeder
  */

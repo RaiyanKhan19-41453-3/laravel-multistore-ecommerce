@@ -89,7 +89,7 @@ export default function AuditLogsIndex({ logs, filters }: { logs: PaginatedLogs;
                                         <td className="text-muted-foreground px-3 py-2 whitespace-nowrap">
                                             {new Date(log.created_at).toLocaleString()}
                                         </td>
-                                        <td className="px-3 py-2">{log.user?.name ?? '—'}</td>
+                                        <td className="px-3 py-2">{log.user?.name ?? '-'}</td>
                                         <td className="px-3 py-2 font-mono text-xs">{log.action}</td>
                                         <td className="px-3 py-2 font-mono text-xs">
                                             {log.method} /{log.path}
@@ -109,7 +109,7 @@ export default function AuditLogsIndex({ logs, filters }: { logs: PaginatedLogs;
                                                     {expanded === log.id ? 'Hide' : 'View'}
                                                 </Button>
                                             ) : (
-                                                <span className="text-muted-foreground">—</span>
+                                                <span className="text-muted-foreground">-</span>
                                             )}
                                         </td>
                                     </tr>

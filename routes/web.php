@@ -3,26 +3,21 @@
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\Store\ProductController as StoreProductController;
+use App\Http\Controllers\Store\StorefrontController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 
-Route::get('/', fn () => Inertia::render('store/index'))->name('home');
+Route::get('/', [StorefrontController::class, 'home'])->name('home');
 
-Route::get('/products/{slug}', fn (string $slug) => Inertia::render('store/products/show', [
-    'slug' => $slug,
-]))->name('store.product');
+Route::get('/products/{slug}', [StorefrontController::class, 'product'])->name('store.product');
 
 Route::get('/products', [StoreProductController::class, 'index'])->name('store.products');
 
-Route::get('/categories/{slug}', fn (string $slug) => Inertia::render('store/categories/show', [
-    'slug' => $slug,
-]))->name('store.category');
+Route::get('/categories/{slug}', [StorefrontController::class, 'category'])->name('store.category');
 
-Route::get('/brands/{slug}', fn (string $slug) => Inertia::render('store/brands/show', [
-    'slug' => $slug,
-]))->name('store.brand');
+Route::get('/brands/{slug}', [StorefrontController::class, 'brand'])->name('store.brand');
 
 Route::get('/search', fn () => Inertia::render('store/search'))->name('store.search');
 

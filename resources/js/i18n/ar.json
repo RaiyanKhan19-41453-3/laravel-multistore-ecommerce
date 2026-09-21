@@ -81,7 +81,7 @@
     "store.perk_secure_text": "ادفع بأمان عبر بوابات موثوقة.",
     "store.perk_support_title": "دعم متعاون",
     "store.perk_support_text": "فريق جاهز لمساعدتك.",
-    "store.promo_title": "التخفيضات بدأت — وفّر الكثير",
+    "store.promo_title": "التخفيضات بدأت: وفّر الكثير",
     "store.promo_text": "خصومات على منتجات وعلامات وأقسام مختارة. الكمية محدودة.",
     "store.shop_sale": "تسوّق التخفيضات",
     "store.footer_shop": "تسوّق",
@@ -117,5 +117,13 @@
     "store.hotline": "الخط الساخن",
     "store.track_order": "تتبّع الطلب",
     "store.deals": "عروض",
-    "store.cod_note": "الدفع عند الاستلام متاح"
+    "store.cod_note": "الدفع عند الاستلام متاح",
+    "store.flash_sale": "فلاش سيل",
+    "store.ends_in": "ينتهي خلال",
+    "store.hours_short": "س",
+    "store.minutes_short": "د",
+    "store.seconds_short": "ث",
+    "store.delivery_title": "التوصيل",
+    "store.delivery_window": "داخل دكا خلال 2-3 أيام، وخارجها خلال 3-5 أيام",
+    "store.no_quick_matches": "لا توجد نتائج سريعة: اضغط Enter للبحث عن"
 }

@@ -9,7 +9,7 @@ return [
     | Admin Settings UI overrides these env defaults via the settings table,
     | so one codebase can serve BD (BDT/en) or SA (SAR/ar) deployments.
     */
-    'name' => env('STORE_NAME', env('APP_NAME', 'Store')),
+    'name' => env('STORE_NAME', 'My Store'),
 
     'country' => env('STORE_COUNTRY', 'BD'),
 

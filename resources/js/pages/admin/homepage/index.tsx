@@ -76,15 +76,15 @@ const LABELS: Record<string, string> = {
 };
 
 const DISPLAY_LABELS: Record<string, string> = {
-    split: 'Split — headline plus product collage',
-    slider: 'Slider — rotating full-width banners',
-    centered: 'Centered — minimal centered headline',
+    split: 'Split: headline plus product collage',
+    slider: 'Slider: rotating full-width banners',
+    centered: 'Centered: minimal centered headline',
 };
 
 const LAYOUT_LABELS: Record<string, string> = {
-    single: 'Single — 1 full-width image',
-    double: 'Double — 2 columns, 2 images',
-    quad: 'Quad — 4 columns, 4 images',
+    single: 'Single: 1 full-width image',
+    double: 'Double: 2 columns, 2 images',
+    quad: 'Quad: 4 columns, 4 images',
 };
 
 const TEXT_LABELS: Record<string, string> = {
@@ -264,7 +264,7 @@ export default function HomepageIndex({
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-medium">{slide.title}</p>
-                                            <p className="text-muted-foreground truncate text-xs">{slide.subtitle ?? '—'}</p>
+                                            <p className="text-muted-foreground truncate text-xs">{slide.subtitle ?? '-'}</p>
                                         </div>
                                         <Switch checked={slide.is_active} onCheckedChange={() => toggleSlide(slide.id)} />
                                         <Button
@@ -404,7 +404,7 @@ function SlideDialog({ editing, onClose }: { editing: Slide | null; onClose: () 
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>{editing ? `Edit — ${editing.title}` : 'Add Slide'}</DialogTitle>
+                    <DialogTitle>{editing ? `Edit: ${editing.title}` : 'Add Slide'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-4">
                     <div className="grid gap-1.5">
@@ -414,7 +414,7 @@ function SlideDialog({ editing, onClose }: { editing: Slide | null; onClose: () 
                                 {preview || editing?.image ? (
                                     <img src={preview ?? editing?.image ?? ''} alt="" className="h-full w-full object-cover" />
                                 ) : (
-                                    <span className="text-muted-foreground text-[10px]">None — gradient fallback</span>
+                                    <span className="text-muted-foreground text-[10px]">None: gradient fallback</span>
                                 )}
                             </span>
                             <Input
@@ -437,8 +437,8 @@ function SlideDialog({ editing, onClose }: { editing: Slide | null; onClose: () 
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="split">Split — text beside the image</SelectItem>
-                                <SelectItem value="full">Full — image fills the whole slide</SelectItem>
+                                <SelectItem value="split">Split: text beside the image</SelectItem>
+                                <SelectItem value="full">Full: image fills the whole slide</SelectItem>
                             </SelectContent>
                         </Select>
                         {errors.layout && <p className="text-destructive text-xs">{errors.layout}</p>}
@@ -583,7 +583,7 @@ function BannerDialog({
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>{editing ? `Edit banner — ${editing.title}` : 'Add Banner'}</DialogTitle>
+                    <DialogTitle>{editing ? `Edit banner: ${editing.title}` : 'Add Banner'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -741,7 +741,7 @@ function BannerDialog({
 /**
  * In-dialog embed finder: paste any YouTube link (watch, Shorts,
  * share, embed) or Maps link and it resolves to a safe embed URL
- * with a live preview — no tab-hopping. The video title fills the
+  * with a live preview: no tab-hopping. The video title fills the
  * banner title when it is still empty.
  */
 function EmbedPicker({
@@ -841,7 +841,7 @@ function EmbedPicker({
                 </Button>
             </div>
             {(fetchError ?? error) && <p className="text-destructive text-xs">{fetchError ?? error}</p>}
-            <p className="text-muted-foreground text-xs">Watch, Shorts, and share links all work — the title fills in itself. One embed per banner.</p>
+            <p className="text-muted-foreground text-xs">Watch, Shorts, and share links all work: the title fills in itself. One embed per banner.</p>
         </div>
     );
 }

@@ -572,7 +572,7 @@ class DiscountService
     /**
      * Load a discount's targeting relations once and derive its level,
      * display target, and variant ids from the loaded collections.
-     * Repeated calls reuse the loaded relations — no extra queries.
+     * Repeated calls reuse the loaded relations: no extra queries.
      *
      * @return array{level: string, target: ?string, variant_ids: int[]}
      */

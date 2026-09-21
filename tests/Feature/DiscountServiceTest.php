@@ -238,7 +238,7 @@ it('excludes expired discounts from bestDiscountForOrder', function () {
 it('discount with no targets applies to all products', function () {
     $product = Product::factory()->create(['price' => 1000]);
     $discount = Discount::factory()->percentage()->create(['value' => 20]);
-    // No targets attached — should match all products
+    // No targets attached: should match all products
 
     $service = new DiscountService;
     $result = $service->bestDiscountForProduct($product, 1000);
@@ -254,7 +254,7 @@ it('discount with no targets applies via category match', function () {
     $product->categories()->attach($category);
 
     $discount = Discount::factory()->percentage()->create(['value' => 15]);
-    // No targets attached — should match all products including this one
+    // No targets attached: should match all products including this one
 
     $service = new DiscountService;
     $result = $service->bestDiscountForProduct($product, 1000);

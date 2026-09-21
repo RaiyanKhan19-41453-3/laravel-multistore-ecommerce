@@ -7,7 +7,9 @@ use App\Http\Requests\Settings\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,15 +31,39 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $user->fill($request->safe()->except(['avatar_file', 'remove_avatar']));
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
         }
 
-        $request->user()->save();
+        if ($request->boolean('remove_avatar')) {
+            $this->deleteAvatarFile($user->avatar);
+            $user->avatar = null;
+        } elseif ($request->hasFile('avatar_file')) {
+            $this->deleteAvatarFile($user->avatar);
+            /** @var UploadedFile $file */
+            $file = $request->file('avatar_file');
+            $user->avatar = '/storage/'.$file->store('avatars', 'public');
+        }
+
+        $user->save();
 
         return to_route('profile.edit');
+    }
+
+    private function deleteAvatarFile(?string $avatar): void
+    {
+        if (! $avatar) {
+            return;
+        }
+
+        $path = ltrim((string) preg_replace('#^/storage/#', '', $avatar), '/');
+
+        if ($path !== '') {
+            Storage::disk('public')->delete($path);
+        }
     }
 
     /**

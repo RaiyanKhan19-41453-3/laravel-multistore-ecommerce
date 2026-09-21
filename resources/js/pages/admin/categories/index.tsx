@@ -170,7 +170,7 @@ function CategoryRow({
             <td className="px-4 py-3 font-medium">{category.name}</td>
             <td className="px-4 py-3 text-neutral-500">{category.slug}</td>
             <td className="px-4 py-3 text-neutral-500">
-                {category.parent ? category.parent.name : <span className="text-xs">—</span>}
+                {category.parent ? category.parent.name : <span className="text-xs">-</span>}
             </td>
             <td className="px-4 py-3 text-neutral-500">{category.children_count ?? 0}</td>
             <td className="px-4 py-3">

@@ -81,7 +81,7 @@
     "store.perk_secure_text": "Pay safely with trusted gateways.",
     "store.perk_support_title": "Helpful support",
     "store.perk_support_text": "Real humans ready to help you.",
-    "store.promo_title": "Sale is on — up to big savings",
+    "store.promo_title": "Sale is on: up to big savings",
     "store.promo_text": "Discounts across selected products, brands, and categories. While stocks last.",
     "store.shop_sale": "Shop the sale",
     "store.footer_shop": "Shop",
@@ -117,5 +117,13 @@
     "store.hotline": "Hotline",
     "store.track_order": "Track Order",
     "store.deals": "Offers",
-    "store.cod_note": "Cash on Delivery available"
+    "store.cod_note": "Cash on Delivery available",
+    "store.flash_sale": "Flash Sale",
+    "store.ends_in": "Ends in",
+    "store.hours_short": "HRS",
+    "store.minutes_short": "MIN",
+    "store.seconds_short": "SEC",
+    "store.delivery_title": "Delivery",
+    "store.delivery_window": "Inside Dhaka in 2-3 days, outside Dhaka in 3-5 days",
+    "store.no_quick_matches": "No quick matches: press Enter to search for"
 }

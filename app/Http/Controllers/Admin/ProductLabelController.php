@@ -97,7 +97,7 @@ class ProductLabelController extends Controller
                 }
 
                 if ($product->isVariable()) {
-                    $skipped[] = "{$product->name}: variable product — pick its variants instead.";
+                    $skipped[] = "{$product->name}: variable product, pick its variants instead.";
 
                     continue;
                 }

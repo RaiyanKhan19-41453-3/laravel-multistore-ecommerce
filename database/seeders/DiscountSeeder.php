@@ -13,7 +13,7 @@ class DiscountSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Summer Sale — 20% off Shoes category, max ৳500 discount, min order ৳200
+        // 1. Summer Sale: 20% off Shoes category, max ৳500 discount, min order ৳200
         $summerSale = Discount::updateOrCreate(
             ['name' => 'Summer Sale'],
             [
@@ -32,7 +32,7 @@ class DiscountSeeder extends Seeder
         );
         $this->attachCategories($summerSale, ['shoes']);
 
-        // 2. Eid Mega Sale — ৳500 off on orders over ৳3000
+        // 2. Eid Mega Sale: ৳500 off on orders over ৳3000
         $eidSale = Discount::updateOrCreate(
             ['name' => 'Eid Mega Sale'],
             [
@@ -51,7 +51,7 @@ class DiscountSeeder extends Seeder
         );
         $this->attachCategories($eidSale, ['clothing', 'pants', 'shoes']);
 
-        // 3. Nike Brand Discount — 15% off all Nike products
+        // 3. Nike Brand Discount: 15% off all Nike products
         $nikeDiscount = Discount::updateOrCreate(
             ['name' => 'Nike Brand Discount'],
             [
@@ -70,7 +70,7 @@ class DiscountSeeder extends Seeder
         );
         $this->attachBrands($nikeDiscount, ['nike']);
 
-        // 4. New Customer Welcome — 10% off first order, coupon-only (not auto-applied)
+        // 4. New Customer Welcome: 10% off first order, coupon-only (not auto-applied)
         $welcomeDiscount = Discount::updateOrCreate(
             ['name' => 'New Customer Welcome'],
             [
@@ -89,9 +89,9 @@ class DiscountSeeder extends Seeder
             ]
         );
 
-        // 5. Flash Sale — 50% off specific products
+        // 5. Flash Sale: 50% off specific products
         $flashSale = Discount::updateOrCreate(
-            ['name' => 'Flash Sale — 50% Off'],
+            ['name' => 'Flash Sale: 50% Off'],
             [
                 'type' => 'percentage',
                 'value' => 50,
@@ -108,7 +108,7 @@ class DiscountSeeder extends Seeder
         );
         $this->attachProducts($flashSale, ['NIK-TS', 'ADI-HD']);
 
-        // 6. Bata Clearance — 30% off Bata brand
+        // 6. Bata Clearance: 30% off Bata brand
         $bataClearance = Discount::updateOrCreate(
             ['name' => 'Bata Clearance'],
             [

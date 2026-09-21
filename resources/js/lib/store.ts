@@ -6,6 +6,7 @@ export interface StoreShared {
     name: string;
     tagline: string;
     logo: string;
+    show_store_name: boolean;
     email: string;
     phone: string;
     address: string;
@@ -26,6 +27,7 @@ export function useStore(): StoreShared {
             name: 'Store',
             tagline: '',
             logo: '',
+            show_store_name: true,
             email: '',
             phone: '',
             address: '',

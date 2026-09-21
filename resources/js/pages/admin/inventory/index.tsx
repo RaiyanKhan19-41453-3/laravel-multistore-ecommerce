@@ -357,7 +357,7 @@ export default function InventoryIndex({
                         <DialogTitle>Adjust Stock</DialogTitle>
                         <DialogDescription>
                             {selectedInventory?.product_name}
-                            {selectedInventory?.variant_name && ` — ${selectedInventory.variant_name}`}
+                            {selectedInventory?.variant_name && `: ${selectedInventory.variant_name}`}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -448,7 +448,7 @@ export default function InventoryIndex({
                         <SheetTitle>Movement History</SheetTitle>
                         <SheetDescription>
                             {selectedInventory?.product_name}
-                            {selectedInventory?.variant_name && ` — ${selectedInventory.variant_name}`}
+                            {selectedInventory?.variant_name && `: ${selectedInventory.variant_name}`}
                         </SheetDescription>
                     </SheetHeader>
 

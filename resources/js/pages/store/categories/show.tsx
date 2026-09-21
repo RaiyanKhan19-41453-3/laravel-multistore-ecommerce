@@ -1,11 +1,9 @@
 import Pagination from '@/components/store/pagination';
 import ProductCard from '@/components/store/product-card';
-import ProductGridSkeleton from '@/components/store/product-grid-skeleton';
 import StoreLayout from '@/layouts/store-layout';
 import { useT } from '@/lib/store';
 import type { PaginatedData, ProductSummary } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 
 interface CategoryData {
     id: number;
@@ -17,43 +15,14 @@ interface CategoryData {
     products: PaginatedData<ProductSummary>;
 }
 
-export default function CategoryShow({ slug }: { slug: string }) {
+export default function CategoryShow({ category }: { category: CategoryData | null }) {
     const t = useT();
-    const [category, setCategory] = useState<CategoryData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        setLoading(true);
-        void fetch(`/api/categories/${slug}`)
-            .then((r) => {
-                if (!r.ok) throw new Error();
-                return r.json();
-            })
-            .then((json: { success: boolean; data: CategoryData }) => {
-                if (json.success) setCategory(json.data);
-                else setError('Category not found.');
-            })
-            .catch(() => setError('Category not found.'))
-            .finally(() => setLoading(false));
-    }, [slug]);
-
-    if (loading) {
-        return (
-            <StoreLayout title="Category">
-                <div className="store-container py-8">
-                    <div className="mb-6 h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-neutral-700" />
-                    <ProductGridSkeleton />
-                </div>
-            </StoreLayout>
-        );
-    }
-
-    if (error || !category) {
+    if (!category) {
         return (
             <StoreLayout title="Category">
                 <div className="store-container py-12">
-                    <p className="text-[var(--store-muted)]">{error ?? 'Not found.'}</p>
+                    <p className="text-[var(--store-muted)]">{t('store.error_loading')}</p>
                     <Link href="/" className="mt-2 inline-block text-sm text-[var(--store-accent)] hover:underline">
                         {t('store.back_to_home')}
                     </Link>

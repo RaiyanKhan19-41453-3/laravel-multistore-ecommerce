@@ -1,4 +1,5 @@
 import StoreLayout from '@/layouts/store-layout';
+import StoreButton from '@/components/store/store-button';
 import { apiStore } from '@/lib/auth';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -121,13 +122,9 @@ export default function ForgotPassword() {
                                 />
                             </div>
 
-                            <button
-                                type="submit"
-                                disabled={busy}
-                                className="rounded-lg bg-[var(--store-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                            >
+                            <StoreButton type="submit" disabled={busy} className="w-full">
                                 {busy ? 'Sending...' : 'Continue'}
-                            </button>
+                            </StoreButton>
                         </form>
                     </>
                 )}
@@ -161,13 +158,9 @@ export default function ForgotPassword() {
                                 />
                             </div>
 
-                            <button
-                                type="submit"
-                                disabled={busy || otp.length !== 6}
-                                className="rounded-lg bg-[var(--store-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                            >
+                            <StoreButton type="submit" disabled={busy || otp.length !== 6} className="w-full">
                                 {busy ? 'Verifying...' : 'Verify Code'}
-                            </button>
+                            </StoreButton>
                         </form>
 
                         <p className="mt-6 text-center text-sm text-[var(--store-muted)]">
@@ -223,13 +216,9 @@ export default function ForgotPassword() {
                                 />
                             </div>
 
-                            <button
-                                type="submit"
-                                disabled={busy}
-                                className="rounded-lg bg-[var(--store-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                            >
+                            <StoreButton type="submit" disabled={busy} className="w-full">
                                 {busy ? 'Resetting...' : 'Reset Password'}
-                            </button>
+                            </StoreButton>
                         </form>
                     </>
                 )}

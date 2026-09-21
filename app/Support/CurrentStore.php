@@ -63,7 +63,7 @@ class CurrentStore
 
     /**
      * Store id to scope tenant queries and scoped unique validation.
-     * Null when no store exists yet (fresh install / early tests) —
+     * Null when no store exists yet (fresh install / early tests):
      * callers must leave queries unscoped in that case so legacy
      * single-store behavior keeps working.
      */

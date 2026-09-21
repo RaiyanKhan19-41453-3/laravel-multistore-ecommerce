@@ -105,7 +105,7 @@ export default function Dashboard({ stats, chart, topProducts, lowStock, recentO
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-                        <p className="text-muted-foreground text-sm">Real-time store performance — revenue, orders, inventory & compliance.</p>
+                        <p className="text-muted-foreground text-sm">Real-time store performance: revenue, orders, inventory and compliance.</p>
                     </div>
                     <div className="flex gap-2">
                         <Link
@@ -158,7 +158,7 @@ export default function Dashboard({ stats, chart, topProducts, lowStock, recentO
                     <div className="bg-card rounded-xl border p-5 shadow-sm lg:col-span-2">
                         <div className="flex items-center justify-between">
                             <h2 className="flex items-center gap-2 font-semibold">
-                                <Activity className="h-4 w-4" /> Revenue — last 14 days
+                                <Activity className="h-4 w-4" /> Revenue: last 14 days
                             </h2>
                             <span className="text-muted-foreground text-xs">Hover bars for values</span>
                         </div>
@@ -265,7 +265,7 @@ export default function Dashboard({ stats, chart, topProducts, lowStock, recentO
                                         <div className="min-w-0">
                                             <p className="truncate text-sm font-medium">
                                                 {r.product_name}
-                                                {r.variant_name ? ` — ${r.variant_name}` : ''}
+                                                {r.variant_name ? `: ${r.variant_name}` : ''}
                                             </p>
                                             <p className="text-muted-foreground text-xs">
                                                 Qty {r.quantity} · Reserved {r.reserved} · Avail {r.available}

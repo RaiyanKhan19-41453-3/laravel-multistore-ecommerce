@@ -30,16 +30,16 @@ function isActive(url: string): boolean {
     return path !== '/' && (current === path || current.startsWith(`${path}/`));
 }
 
-export function SmartLink({ href, className, children, onClick }: { href: string; className?: string; children: React.ReactNode; onClick?: () => void }) {
+export function SmartLink({ href, className, style, children, onClick }: { href: string; className?: string; style?: React.CSSProperties; children: React.ReactNode; onClick?: () => void }) {
     if (isExternal(href)) {
         return (
-            <a href={href} className={className} onClick={onClick}>
+            <a href={href} className={className} style={style} onClick={onClick}>
                 {children}
             </a>
         );
     }
     return (
-        <Link href={href} className={className} onClick={onClick}>
+        <Link href={href} className={className} style={style} onClick={onClick}>
             {children}
         </Link>
     );
@@ -100,14 +100,15 @@ export function DesktopNav({ items }: { items: MenuNode[] }) {
                         )}
 
                         {expandable && open && !mega && (
-                            <div className="absolute top-full start-0 z-50 min-w-56 pt-2">
+                            <div className="store-menu-panel absolute top-full start-0 z-50 min-w-56 pt-2">
                                 <div className="overflow-hidden rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-1.5 shadow-[var(--store-shadow)]">
-                                    {item.children.map((child) => (
+                                    {item.children.map((child, i) => (
                                         <SmartLink
                                             key={child.id}
                                             href={child.url}
                                             onClick={() => setOpenId(null)}
-                                            className="block rounded-xl px-3.5 py-2 text-sm transition hover:bg-[var(--store-card-hover)] hover:text-[var(--store-accent)]"
+                                            className="store-menu-item block rounded-xl px-3.5 py-2 text-sm transition hover:bg-[var(--store-card-hover)] hover:text-[var(--store-accent)]"
+                                            style={{ animationDelay: `${Math.min(i, 8) * 18}ms` }}
                                         >
                                             {child.title}
                                         </SmartLink>
@@ -117,7 +118,7 @@ export function DesktopNav({ items }: { items: MenuNode[] }) {
                         )}
 
                         {expandable && open && mega && (
-                            <div className="absolute inset-x-4 top-full z-50 pt-2">
+                            <div className="store-menu-panel absolute inset-x-4 top-full z-50 -mt-3 pt-5">
                                 <div className="overflow-hidden rounded-xl border border-[var(--store-border)] bg-[var(--store-card)] shadow-[var(--store-shadow)]">
                                     <div className={`grid gap-8 p-6 md:p-8 ${item.promo ? 'md:grid-cols-[1fr_240px]' : ''}`}>
                                         <div
@@ -126,12 +127,13 @@ export function DesktopNav({ items }: { items: MenuNode[] }) {
                                         >
                                             {chunk(item.children, 6).map((column, i) => (
                                                 <ul key={i} className="space-y-1">
-                                                    {column.map((child) => (
+                                                    {column.map((child, j) => (
                                                         <li key={child.id}>
                                                             <SmartLink
                                                                 href={child.url}
                                                                 onClick={() => setOpenId(null)}
-                                                                className="block rounded-lg px-2 py-1.5 text-sm text-[var(--store-muted)] transition hover:bg-[var(--store-card-hover)] hover:text-[var(--store-accent)]"
+                                                                className="store-menu-item block rounded-lg px-2 py-1.5 text-sm text-[var(--store-muted)] transition hover:bg-[var(--store-card-hover)] hover:text-[var(--store-accent)]"
+                                                                style={{ animationDelay: `${Math.min(i * 6 + j, 14) * 15}ms` }}
                                                             >
                                                                 {child.title}
                                                             </SmartLink>
@@ -204,18 +206,24 @@ export function MobileNav({ items, onNavigate }: { items: MenuNode[]; onNavigate
                                 </button>
                             )}
                         </div>
-                        {expandable && isOpen && (
-                            <div className="ms-3 space-y-0.5 border-s-2 border-[var(--store-border)] ps-2">
-                                {item.children.map((child) => (
-                                    <SmartLink
-                                        key={child.id}
-                                        href={child.url}
-                                        onClick={onNavigate}
-                                        className="block rounded-lg px-3 py-2 text-sm text-[var(--store-muted)] transition hover:bg-[var(--store-card-hover)] hover:text-[var(--store-text)]"
-                                    >
-                                        {child.title}
-                                    </SmartLink>
-                                ))}
+                        {expandable && (
+                            <div
+                                className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+                            >
+                                <div className="overflow-hidden">
+                                    <div className="ms-3 space-y-0.5 border-s-2 border-[var(--store-border)] ps-2">
+                                        {item.children.map((child) => (
+                                            <SmartLink
+                                                key={child.id}
+                                                href={child.url}
+                                                onClick={onNavigate}
+                                                className="block rounded-lg px-3 py-2 text-sm text-[var(--store-muted)] transition hover:bg-[var(--store-card-hover)] hover:text-[var(--store-text)]"
+                                            >
+                                                {child.title}
+                                            </SmartLink>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

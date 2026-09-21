@@ -1,11 +1,9 @@
 import Pagination from '@/components/store/pagination';
 import ProductCard from '@/components/store/product-card';
-import ProductGridSkeleton from '@/components/store/product-grid-skeleton';
 import StoreLayout from '@/layouts/store-layout';
 import { useT } from '@/lib/store';
 import type { PaginatedData, ProductSummary } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 
 interface BrandData {
     id: number;
@@ -15,43 +13,14 @@ interface BrandData {
     products: PaginatedData<ProductSummary>;
 }
 
-export default function BrandShow({ slug }: { slug: string }) {
+export default function BrandShow({ brand }: { brand: BrandData | null }) {
     const t = useT();
-    const [brand, setBrand] = useState<BrandData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        setLoading(true);
-        void fetch(`/api/brands/${slug}`)
-            .then((r) => {
-                if (!r.ok) throw new Error();
-                return r.json();
-            })
-            .then((json: { success: boolean; data: BrandData }) => {
-                if (json.success) setBrand(json.data);
-                else setError('Brand not found.');
-            })
-            .catch(() => setError('Brand not found.'))
-            .finally(() => setLoading(false));
-    }, [slug]);
-
-    if (loading) {
-        return (
-            <StoreLayout title="Brand">
-                <div className="store-container py-8">
-                    <div className="mb-6 h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-neutral-700" />
-                    <ProductGridSkeleton />
-                </div>
-            </StoreLayout>
-        );
-    }
-
-    if (error || !brand) {
+    if (!brand) {
         return (
             <StoreLayout title="Brand">
                 <div className="store-container py-12">
-                    <p className="text-[var(--store-muted)]">{error ?? 'Not found.'}</p>
+                    <p className="text-[var(--store-muted)]">{t('store.error_loading')}</p>
                     <Link href="/" className="mt-2 inline-block text-sm text-[var(--store-accent)] hover:underline">
                         {t('store.back_to_home')}
                     </Link>

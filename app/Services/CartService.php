@@ -442,7 +442,7 @@ class CartService
             $inventory = $this->getInventory($guestItem->product, $guestItem->productVariant);
             $this->inventoryService->release($inventory, $guestItem->quantity);
         } catch (\InvalidArgumentException) {
-            // Inventory row gone — nothing left to release.
+            // Inventory row gone: nothing left to release.
         }
     }
 

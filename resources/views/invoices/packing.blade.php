@@ -19,7 +19,7 @@
 <div class="sheet">
   <div class="header">
     <div><div style="font-weight:800">{{ $store['name'] }}</div><div style="font-size:12px; color:#6b7280">Packing Slip · {{ $order->order_number }} · {{ strtoupper($order->status) }}</div></div>
-    <div class="right" style="font-size:12px; color:#6b7280">{{ $order->created_at->format('Y-m-d') }}<br>{{ $order->shipping_method_name ?? '—' }}</div>
+    <div class="right" style="font-size:12px; color:#6b7280">{{ $order->created_at->format('Y-m-d') }}<br>{{ $order->shipping_method_name ?? '-' }}</div>
   </div>
   <div class="box grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
     <div><div style="font-size:11px; letter-spacing:.08em; color:#6b7280">SHIP TO</div><div style="font-weight:600">{{ $order->shipping_name }}</div><div>{{ $order->shipping_phone }}</div><div>{{ $order->shipping_address }}, {{ $order->shipping_city }}</div><div>{{ $order->shipping_country }}</div></div>

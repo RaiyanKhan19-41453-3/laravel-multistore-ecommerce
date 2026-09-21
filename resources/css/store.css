@@ -1,22 +1,23 @@
 @custom-variant dark (&:is(.storefront *));
 
 .storefront {
-    --store-bg: #f7faf8;
-    --store-text: #14201a;
-    --store-muted: #67756d;
-    --store-accent: #006a4e;
-    --store-accent-strong: #004d38;
-    --store-accent-soft: #dff0e7;
-    --store-accent-ink: #f2fbf6;
-    --store-border: #dde8e1;
+    --store-bg: #f6f4ee;
+    --store-text: #1f2937;
+    --store-muted: #6b7280;
+    --store-accent: #0e7a3d;
+    --store-accent-strong: #0a5c2e;
+    --store-accent-soft: #e2f1e7;
+    --store-accent-ink: #ffffff;
+    --store-deal: #e11d2e;
+    --store-border: #e5e0d5;
     --store-card: #ffffff;
-    --store-card-hover: #eef5f0;
+    --store-card-hover: #efede6;
     --store-input: #ffffff;
     --store-success: #15803d;
     --store-success-soft: #f0fdf4;
-    --store-star: #f4900c;
-    --store-hero-from: #0c1f16;
-    --store-hero-to: #16402e;
+    --store-star: #f5a623;
+    --store-hero-from: #0b2b17;
+    --store-hero-to: #0e5c30;
     --store-radius: 0.5rem;
     --store-shadow: 0 1px 2px rgb(28 25 23 / 0.06), 0 12px 32px -16px rgb(28 25 23 / 0.28);
 }
@@ -44,14 +45,54 @@
     }
 }
 
+/* Nav menu motion: soft fade-slide on open, staggered links in mega. */
+@keyframes store-menu-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes store-menu-item-in {
+    from {
+        opacity: 0;
+        transform: translateX(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.storefront .store-menu-panel {
+    animation: store-menu-in 0.18s ease-out;
+    transform-origin: top center;
+}
+
+.storefront .store-menu-item {
+    animation: store-menu-item-in 0.22s ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .storefront .store-menu-panel,
+    .storefront .store-menu-item {
+        animation: none;
+    }
+}
+
 .storefront.dark {
-    --store-bg: #0e1512;
-    --store-text: #f0f7f3;
-    --store-muted: #9db3a8;
-    --store-accent: #34d399;
-    --store-accent-strong: #6ee7b7;
-    --store-accent-soft: #0b2e22;
-    --store-accent-ink: #052e1f;
+    --store-bg: #12140f;
+    --store-text: #f3f0e8;
+    --store-muted: #a8a29e;
+    --store-accent: #35c163;
+    --store-accent-strong: #6fe39a;
+    --store-accent-soft: #0f2c1a;
+    --store-accent-ink: #04150b;
+    --store-deal: #ff6b6b;
     --store-border: #2c2721;
     --store-card: #1e1a17;
     --store-card-hover: #292420;
@@ -59,8 +100,8 @@
     --store-success: #4ade80;
     --store-success-soft: #052e16;
     --store-star: #ffcc4d;
-    --store-hero-from: #141110;
-    --store-hero-to: #292420;
+    --store-hero-from: #101410;
+    --store-hero-to: #1d2b1f;
     --store-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 16px 40px -16px rgb(0 0 0 / 0.7);
 }
 

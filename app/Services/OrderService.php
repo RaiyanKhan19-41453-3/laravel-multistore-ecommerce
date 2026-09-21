@@ -429,7 +429,7 @@ class OrderService
     /**
      * Return captured money for every paid payment on a cancelled order.
      * Runs after the cancel transaction commits so gateway latency never
-     * holds row locks; a failed refund never blocks the cancellation —
+     * holds row locks; a failed refund never blocks the cancellation:
      * it is logged for manual review instead.
      */
     private function refundPaidPayments(Order $order): void
@@ -585,7 +585,7 @@ class OrderService
                 $inventory = $this->getInventoryForItem($item);
                 $this->inventoryService->release($inventory, $item->quantity);
             } catch (\InvalidArgumentException) {
-                // Inventory row gone (test helpers create rows directly) — nothing to release.
+                // Inventory row gone (test helpers create rows directly): nothing to release.
             }
         }
     }

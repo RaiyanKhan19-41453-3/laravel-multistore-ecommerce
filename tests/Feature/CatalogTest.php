@@ -25,6 +25,19 @@ it('renders the store products page with server-side products and filters', func
     );
 });
 
+it('serves the homepage with server-side props', function () {
+    Product::factory()->create(['name' => 'Home Featured', 'is_active' => true, 'is_featured' => true]);
+
+    $this->get('/')->assertOk()->assertInertia(
+        fn ($p) => $p->component('store/index')
+            ->has('featured')
+            ->has('blocks')
+            ->has('slides')
+            ->has('nav.menus')
+            ->has('nav.categories')
+    );
+});
+
 it('loads approved review aggregates without per-product review queries', function () {
     $products = Product::factory()->count(3)->create(['is_active' => true]);
 
@@ -130,7 +143,7 @@ it('sends filters as a JSON object so array-prototype keys cannot leak to the cl
     $filters = $response->viewData('page')['props']['filters'];
 
     // $request->only() returns PHP [] when empty, which serializes to JSON []
-    // — and JS [].sort is Array.prototype.sort, which useState() invokes as
+    // - and JS [].sort is Array.prototype.sort, which useState() invokes as
     // a lazy initializer and crashes the page. stdClass serializes as {}.
     expect($filters)->toBeInstanceOf(stdClass::class);
     expect(json_encode($filters))->toBe('{}');

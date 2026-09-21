@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { formatPrice } from '@/lib/format';
+import { useT } from '@/lib/store';
 import ProductImage from './product-image';
 
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -25,6 +26,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
  * in-flight request cancellation.
  */
 export default function SearchBox({ compact = false }: { compact?: boolean }) {
+    const t = useT();
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -120,17 +122,17 @@ export default function SearchBox({ compact = false }: { compact?: boolean }) {
                         if (query.trim().length >= 2 && items.length > 0) setOpen(true);
                     }}
                     onKeyDown={onKeyDown}
-                    placeholder="Search products..."
+                    placeholder={t('store.search')}
                     aria-expanded={open}
-                    aria-label="Search products"
-                    className={`w-full rounded-lg border-2 border-[var(--store-accent)] bg-[var(--store-input)] pe-12 ps-11 text-sm transition outline-none placeholder:text-[var(--store-muted)] ${
+                    aria-label={t('store.search')}
+                    className={`w-full rounded-lg border-2 border-[var(--store-accent)] bg-[var(--store-input)] pe-12 ps-11 text-sm text-[var(--store-text)] transition outline-none placeholder:text-[var(--store-muted)] ${
                         compact ? 'py-2' : 'py-2.5'
                     }`}
                 />
                 <button
                     type="submit"
                     aria-label="Search"
-                    className="absolute top-1 bottom-1 end-1 flex w-11 items-center justify-center rounded-lg bg-[var(--store-accent)] text-[var(--store-accent-ink)] transition hover:opacity-85"
+                    className="absolute top-1 bottom-1 end-1 flex w-11 items-center justify-center rounded-full bg-gradient-to-b from-[var(--store-accent)] to-[var(--store-accent-strong)] text-[var(--store-accent-ink)] shadow transition hover:brightness-110 active:scale-95"
                 >
                     {loading ? <span className="h-4 w-4 animate-spin rounded-lg border-2 border-white/40 border-t-white" /> : <Search className="h-4 w-4" />}
                 </button>
@@ -145,7 +147,7 @@ export default function SearchBox({ compact = false }: { compact?: boolean }) {
                                 onClick={() => goSearch(query)}
                                 className="block w-full px-4 py-3.5 text-start text-sm text-[var(--store-muted)] transition hover:bg-[var(--store-card-hover)]"
                             >
-                                No quick matches — press Enter to search for “{query.trim()}”.
+                                {t('store.no_quick_matches')} “{query.trim()}”.
                             </button>
                         ) : (
                             <>

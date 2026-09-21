@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 /**
  * Safety net: every GET endpoint must render without a server error.
  * Redirects (guest -> login), 403s (wrong role) and 404s (dummy ids)
- * are all acceptable — only 5xx responses fail. Catches crashed pages
+ * are all acceptable: only 5xx responses fail. Catches crashed pages
  * like the old /products prop mismatch or empty-state 500s.
  */
 it('serves every GET route without server errors for guests', function () {

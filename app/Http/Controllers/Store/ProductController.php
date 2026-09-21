@@ -32,7 +32,7 @@ class ProductController extends Controller
         return Inertia::render('store/products/index', [
             'products' => $this->catalog->paginate($filters),
             // Cast to object: an empty $request->only() is PHP [] which
-            // serializes to JSON [] — and JS [].sort is Array.prototype.sort,
+            // serializes to JSON []: and JS [].sort is Array.prototype.sort,
             // which useState() would invoke as a lazy initializer (crash).
             'filters' => (object) $filters,
             'brands' => $this->catalog->brandOptions(),

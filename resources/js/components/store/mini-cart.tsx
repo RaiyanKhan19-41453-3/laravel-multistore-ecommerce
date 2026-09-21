@@ -7,6 +7,7 @@ import { ArrowRight, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import ProductImage from './product-image';
 import QuantityStepper from './quantity-stepper';
+import StoreButton from './store-button';
 
 export const MINI_CART_OPEN_EVENT = 'cart:open';
 
@@ -133,13 +134,14 @@ export default function MiniCart() {
                             </span>
                             <p className="mt-4 font-bold">{t('store.cart_empty_title')}</p>
                             <p className="mt-1 text-sm text-[var(--store-muted)]">{t('store.cart_empty_text')}</p>
-                            <Link
+                            <StoreButton
                                 href="/products"
                                 onClick={() => setOpen(false)}
-                                className="mt-6 rounded-lg bg-[var(--store-accent)] px-6 py-2.5 text-sm font-bold text-[var(--store-accent-ink)] transition hover:opacity-90"
+                                size="sm"
+                                className="mt-6"
                             >
                                 {t('store.continue_shopping')}
-                            </Link>
+                            </StoreButton>
                         </div>
                     ) : (
                         <ul className="divide-y divide-[var(--store-border)]">
@@ -195,21 +197,23 @@ export default function MiniCart() {
                             <span>{formatPrice(cart.total)}</span>
                         </div>
                         <div className="mt-3.5 grid grid-cols-2 gap-2">
-                            <Link
+                            <StoreButton
                                 href="/cart"
                                 onClick={() => setOpen(false)}
-                                className="rounded-lg border border-[var(--store-border)] py-2.5 text-center text-sm font-bold transition hover:bg-[var(--store-card-hover)]"
+                                size="sm"
+                                variant="outline"
                             >
                                 {t('store.view_cart')}
-                            </Link>
-                            <Link
+                            </StoreButton>
+                            <StoreButton
                                 href="/checkout"
                                 onClick={() => setOpen(false)}
-                                className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--store-accent)] py-2.5 text-center text-sm font-bold text-[var(--store-accent-ink)] transition hover:opacity-90"
+                                size="sm"
+                                className="flex-1"
                             >
                                 {t('store.checkout')}
                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                            </Link>
+                            </StoreButton>
                         </div>
                     </div>
                 )}

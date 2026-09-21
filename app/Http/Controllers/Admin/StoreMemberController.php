@@ -156,7 +156,7 @@ class StoreMemberController extends Controller
      * A removed member with no stores left must not keep merchant access:
      * without memberships they would fall back to the platform-wide view.
      * store-owner is always membership-bound, so it goes. The auto-granted
-     * support baseline goes too, but only when nothing else remains —
+     * support baseline goes too, but only when nothing else remains:
      * holders of real staff roles (catalog-manager, …) keep them.
      */
     private function stripOrphanedMerchantRole(User $member): void

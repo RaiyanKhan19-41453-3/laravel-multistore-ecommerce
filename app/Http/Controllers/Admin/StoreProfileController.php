@@ -23,6 +23,7 @@ class StoreProfileController extends Controller
                 'name' => $this->settings->get('store.name') ?? '',
                 'tagline' => $this->settings->get('store.tagline') ?? '',
                 'logo' => $this->settings->get('store.logo'),
+                'show_store_name' => $this->settings->get('store.show_store_name', '1') !== '0',
                 'email' => $this->settings->get('store.email') ?? '',
                 'phone' => $this->settings->get('store.phone') ?? '',
                 'address' => $this->settings->get('store.address') ?? '',
@@ -30,11 +31,14 @@ class StoreProfileController extends Controller
                 'google_tag_id' => $this->settings->get('marketing.google_tag_id') ?? '',
                 'google_site_verification' => $this->settings->get('marketing.google_site_verification') ?? '',
                 'meta_pixel_id' => $this->settings->get('marketing.meta_pixel_id') ?? '',
+                'twitter_handle' => $this->settings->get('marketing.twitter_handle') ?? '',
                 'meta_title' => $this->settings->get('store.meta_title') ?? '',
                 'meta_description' => $this->settings->get('store.meta_description') ?? '',
-                'theme_color' => $this->settings->get('store.theme_color') ?? '',
                 'favicon' => $this->settings->get('store.favicon'),
                 'og_image' => $this->settings->get('store.og_image'),
+                'og_image_alt' => $this->settings->get('social.og_image_alt') ?? '',
+                'twitter_card' => $this->settings->get('social.twitter_card', 'summary_large_image'),
+                'robots_noindex' => $this->settings->get('store.robots_noindex', '0') !== '0',
             ],
         ]);
     }
@@ -50,10 +54,14 @@ class StoreProfileController extends Controller
             'city' => 'nullable|string|max:100',
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string|max:500',
-            'theme_color' => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
             'google_tag_id' => ['nullable', 'string', 'regex:/^(GTM-[A-Z0-9]+|G-[A-Z0-9]+)$/'],
             'google_site_verification' => 'nullable|string|max:255|regex:/^[A-Za-z0-9_-]+$/',
             'meta_pixel_id' => 'nullable|string|regex:/^[0-9]{5,20}$/',
+            'twitter_handle' => 'nullable|string|regex:/^@[A-Za-z0-9_]{1,15}$/',
+            'twitter_card' => 'nullable|string|in:summary,summary_large_image',
+            'og_image_alt' => 'nullable|string|max:255',
+            'robots_noindex' => 'nullable|boolean',
+            'show_store_name' => 'nullable|boolean',
             'logo_file' => 'nullable|file|mimes:jpeg,png,webp,svg|max:2048',
             'remove_logo' => 'nullable|boolean',
             'favicon_file' => 'nullable|file|mimes:jpeg,png,webp,svg,ico|max:1024',
@@ -75,10 +83,12 @@ class StoreProfileController extends Controller
             'store.city' => $request->input('city'),
             'store.meta_title' => $request->input('meta_title'),
             'store.meta_description' => $request->input('meta_description'),
-            'store.theme_color' => $request->input('theme_color'),
             'marketing.google_tag_id' => $request->input('google_tag_id'),
             'marketing.google_site_verification' => $request->input('google_site_verification'),
             'marketing.meta_pixel_id' => $request->input('meta_pixel_id'),
+            'marketing.twitter_handle' => $request->input('twitter_handle'),
+            'social.twitter_card' => $request->input('twitter_card'),
+            'social.og_image_alt' => $request->input('og_image_alt'),
         ], fn ($value) => $value !== null);
 
         if (! empty($values)) {
@@ -89,6 +99,19 @@ class StoreProfileController extends Controller
                 $this->settings->set($key, $value, $group ?? 'general');
             }
         }
+
+        // Checkbox semantics: absent means off, so persist explicitly
+        // instead of leaving a stale value behind.
+        $this->settings->set(
+            'store.show_store_name',
+            $request->boolean('show_store_name') ? '1' : '0',
+            'store'
+        );
+        $this->settings->set(
+            'store.robots_noindex',
+            $request->boolean('robots_noindex') ? '1' : '0',
+            'store'
+        );
 
         return to_route('admin.store-profile.index')->with('success', __('store.saved'));
     }
