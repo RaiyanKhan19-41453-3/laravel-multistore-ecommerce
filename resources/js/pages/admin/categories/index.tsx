@@ -16,11 +16,13 @@ interface Category {
     name: string;
     slug: string;
     description: string | null;
+    image: string | null;
     is_active: boolean;
     sort_order: number;
     parent_id: number | null;
     parent?: { id: number; name: string } | null;
     children_count?: number;
+    products_count?: number;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -41,13 +43,15 @@ function CategoryForm({
 }) {
     const isEdit = !!category;
 
-    const { data, setData, post, put, errors, processing } = useForm({
+    const { data, setData, post, errors, processing, transform } = useForm({
         parent_id: category?.parent_id ?? parentId ?? '',
         name: category?.name ?? '',
         slug: category?.slug ?? '',
         description: category?.description ?? '',
         is_active: category?.is_active ?? true,
         sort_order: category?.sort_order ?? 0,
+        image_file: null as File | null,
+        remove_image: false as boolean,
     });
 
     const availableParents = parentCategories.filter((pc) => pc.id !== category?.id);
@@ -55,7 +59,10 @@ function CategoryForm({
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         if (isEdit) {
-            put(route('admin.categories.update', category.id), {
+            // POST with spoofed PUT: PHP discards multipart bodies on real
+            // PUT requests, so the image would never arrive otherwise.
+            transform((formData) => ({ ...formData, _method: 'PUT' }));
+            post(route('admin.categories.update', category.id), {
                 onSuccess: () => onClose(),
             });
         } else {
@@ -122,6 +129,42 @@ function CategoryForm({
                 <InputError className="mt-2" message={errors.description} />
             </div>
 
+            <div className="grid gap-2">
+                <Label htmlFor="image">Cover image</Label>
+                <div className="flex items-center gap-3">
+                    {category?.image && !data.image_file && !data.remove_image && (
+                        <img
+                            src={category.image.startsWith('/') || category.image.startsWith('http') ? category.image : `/storage/${category.image}`}
+                            alt={category.name}
+                            className="h-12 w-12 rounded-lg border object-cover"
+                        />
+                    )}
+                    <Input
+                        id="image"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => {
+                            setData('image_file', e.target.files?.[0] ?? null);
+                            setData('remove_image', false);
+                        }}
+                        className="cursor-pointer"
+                    />
+                    {isEdit && category?.image && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setData('image_file', null);
+                                setData('remove_image', !data.remove_image);
+                            }}
+                        >
+                            {data.remove_image ? 'Keep image' : 'Remove'}
+                        </Button>
+                    )}
+                </div>
+                <InputError className="mt-2" message={errors.image_file} />
+            </div>
+
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                     <Switch id="is_active" checked={data.is_active} onCheckedChange={(checked) => setData('is_active', checked)} />
@@ -167,20 +210,52 @@ function CategoryRow({
 }) {
     return (
         <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-            <td className="px-4 py-3 font-medium">{category.name}</td>
-            <td className="px-4 py-3 text-neutral-500">{category.slug}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    {category.image ? (
+                                                        <img
+                                                            src={category.image.startsWith('/') || category.image.startsWith('http') ? category.image : `/storage/${category.image}`}
+                                                            alt={category.name}
+                                                            className="h-9 w-9 shrink-0 rounded-lg border object-cover"
+                                                        />
+                                                    ) : (
+                                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-sm font-bold dark:bg-neutral-800">
+                                                            {category.name.charAt(0).toUpperCase()}
+                                                        </span>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="truncate font-medium">{category.name}</p>
+                                                        <p className="truncate text-xs text-neutral-500">{category.slug}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
             <td className="px-4 py-3 text-neutral-500">
                 {category.parent ? category.parent.name : <span className="text-xs">-</span>}
             </td>
-            <td className="px-4 py-3 text-neutral-500">{category.children_count ?? 0}</td>
             <td className="px-4 py-3">
-                <Switch
-                    checked={category.is_active}
-                    onCheckedChange={() => onToggle(category)}
-                />
+                <div className="flex items-center gap-2">
+                    <span className="inline-flex min-w-8 justify-center rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-semibold tabular-nums dark:bg-neutral-800">
+                        {category.products_count ?? 0}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                        {category.children_count ?? 0} {category.children_count === 1 ? 'child' : 'children'}
+                    </span>
+                </div>
             </td>
             <td className="px-4 py-3">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                    <Switch
+                        checked={category.is_active}
+                        onCheckedChange={() => onToggle(category)}
+                    />
+                    <span className="text-xs text-neutral-500">
+                        {category.is_active ? 'Active' : 'Hidden'}
+                    </span>
+                </div>
+            </td>
+            <td className="px-4 py-3 text-sm tabular-nums text-neutral-500">{category.sort_order}</td>
+            <td className="px-4 py-3">
+                <div className="flex items-center justify-end gap-1">
                     <button
                         onClick={() => onCreateChild(category.id)}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -258,12 +333,12 @@ export default function CategoriesIndex({
                     <table className="w-full text-left text-sm">
                         <thead className="border-b bg-neutral-50 dark:bg-neutral-800">
                             <tr>
-                                <th className="px-4 py-3 font-medium">Name</th>
-                                <th className="px-4 py-3 font-medium">Slug</th>
+                                <th className="px-4 py-3 font-medium">Category</th>
                                 <th className="px-4 py-3 font-medium">Parent</th>
-                                <th className="px-4 py-3 font-medium">Children</th>
+                                <th className="px-4 py-3 font-medium">Contents</th>
                                 <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium">Actions</th>
+                                <th className="px-4 py-3 font-medium">Sort</th>
+                                <th className="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">

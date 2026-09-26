@@ -79,6 +79,11 @@ class ProductController extends Controller
                 ],
             ]),
             'image' => $variant->images->first()?->getUrl('medium'),
+            'images' => $variant->images->map(fn ($img) => [
+                'id' => $img->id,
+                'url' => $img->getUrl('medium'),
+                'alt_text' => $img->alt_text,
+            ])->values()->all(),
             'inventory' => [
                 'quantity' => $variant->inventory?->quantity ?? 0,
                 'available' => $variant->inventory?->getAvailableQuantity() ?? 0,

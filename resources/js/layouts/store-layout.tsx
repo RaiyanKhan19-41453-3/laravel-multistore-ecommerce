@@ -2,11 +2,12 @@ import { apiStore, clearAuth, getUser, type StoreUser } from '@/lib/auth';
 import { useDirection, useLocale, useStore, useT } from '@/lib/store';
 import type { CartSummary } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { BadgePercent, Heart, Home, LayoutGrid, LogOut, Mail, MapPin, Menu, Package, Phone, ShoppingBag, Tag, User as UserIcon, X, Banknote } from 'lucide-react';
+import { BadgePercent, Heart, Home, LayoutGrid, LogOut, Mail, MapPin, Menu, Package, Phone, ShoppingBag, Tag, User as UserIcon, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import MiniCart, { openMiniCart } from '@/components/store/mini-cart';
 import PayBadges from '@/components/store/pay-badges';
+import QuickViewModal from '@/components/store/quick-view';
 import SearchBox from '@/components/store/search-box';
 import StoreButton from '@/components/store/store-button';
 import StoreLogo from '@/components/store/store-logo';
@@ -80,37 +81,6 @@ export default function StoreLayout({ title, children }: { title?: string; child
                     <Tag className="h-3.5 w-3.5" />
                     {t('store.promo_text')}
                 </span>
-            </div>
-
-            {/* Utility strip: hotline + trust left, account shortcuts right */}
-            <div className="hidden border-b border-[var(--store-border)] bg-[var(--store-card)] md:block">
-                <div className="store-container flex items-center gap-4 py-1.5 text-xs text-[var(--store-muted)]">
-                    {store.phone && (
-                        <a href={`tel:${store.phone.replace(/\s+/g, '')}`} className="flex items-center gap-1.5 font-semibold transition hover:text-[var(--store-accent)]">
-                            <Phone className="h-3.5 w-3.5" />
-                            {t('store.hotline')}: <span dir="ltr">{store.phone}</span>
-                        </a>
-                    )}
-                    <span className="flex items-center gap-1.5">
-                        <Banknote className="h-3.5 w-3.5" />
-                        {t('store.cod_note')}
-                    </span>
-                    <span className="ms-auto flex items-center gap-4">
-                        <Link href="/account/orders" className="transition hover:text-[var(--store-accent)]">
-                            {t('store.track_order')}
-                        </Link>
-                        {user ? (
-                            <Link href="/account" className="transition hover:text-[var(--store-accent)]">
-                                {user.name}
-                            </Link>
-                        ) : (
-                            <Link href="/account/login" className="transition hover:text-[var(--store-accent)]">
-                                {t('store.login')}
-                            </Link>
-                        )}
-                        <span className="rounded border border-[var(--store-border)] px-1.5 py-0.5 font-semibold">{store.currency}</span>
-                    </span>
-                </div>
             </div>
 
             <header className="sticky top-0 z-40 bg-[var(--store-accent)] text-[var(--store-accent-ink)] shadow-md">
@@ -296,6 +266,13 @@ export default function StoreLayout({ title, children }: { title?: string; child
                             >
                                 <ShoppingBag className="h-4 w-4" /> {t('store.cart')}
                             </button>
+                            <Link
+                                href="/order-confirmation"
+                                onClick={() => setMenuOpen(false)}
+                                className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition hover:bg-[var(--store-card-hover)]"
+                            >
+                                <Package className="h-4 w-4" /> {t('store.track_order')}
+                            </Link>
                             {user && (
                                 <Link
                                     href="/wishlist"
@@ -353,6 +330,7 @@ export default function StoreLayout({ title, children }: { title?: string; child
 
             <main className="flex-1 pb-20 md:pb-0">{children}</main>
             <MiniCart />
+            <QuickViewModal />
 
             {/* Mobile bottom tab bar (BD shoppers live on phones) */}
             <MobileTabBar

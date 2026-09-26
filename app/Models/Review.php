@@ -23,6 +23,9 @@ class Review extends Model
         'title',
         'body',
         'is_approved',
+        'verified_purchase',
+        'guest_name',
+        'guest_email',
     ];
 
     protected function casts(): array
@@ -30,6 +33,7 @@ class Review extends Model
         return [
             'rating' => 'integer',
             'is_approved' => 'boolean',
+            'verified_purchase' => 'boolean',
         ];
     }
 
@@ -45,6 +49,6 @@ class Review extends Model
 
     public function scopeApproved($query)
     {
-        return $query->where('is_approved', true);
+        return $query->where('is_approved', true)->where('verified_purchase', true);
     }
 }

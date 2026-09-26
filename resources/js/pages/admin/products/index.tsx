@@ -4,9 +4,10 @@ import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
+import { useStore } from '@/lib/store';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Eye, Image, Layers, Pencil, Plus, Printer, SlidersHorizontal, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, Image, Layers, Pencil, Percent, Plus, Printer, SlidersHorizontal, Star, Trash2, X } from 'lucide-react';
 import { FormEventHandler } from 'react';
 
 interface Product {
@@ -16,12 +17,14 @@ interface Product {
     type: string;
     sku: string;
     price: string;
+    compare_at_price: string | number | null;
     quantity: number;
     is_active: boolean;
     is_featured: boolean;
     brand: { id: number; name: string } | null;
     variants_count: number;
     images_count: number;
+    primary_image: string | null;
     discounts: { id: number; name: string; type: string; value: number }[];
     categories: { id: number; name: string }[];
 }
@@ -97,6 +100,7 @@ export default function ProductsIndex({
     discounts: { id: number; name: string }[];
     filters: Filters;
 }) {
+    const { currencySymbol } = useStore();
     const { data, setData, get } = useForm({
         search: filters.search ?? '',
         brand_id: filters.brand_id ?? '',
@@ -253,10 +257,7 @@ export default function ProductsIndex({
                         <thead className="border-b bg-neutral-50 dark:bg-neutral-800">
                             <tr>
                                 <th className="px-4 py-3 font-medium">
-                                    <SortableHeader label="Name" sortField="name" currentSort={filters.sort} currentDirection={filters.direction} />
-                                </th>
-                                <th className="px-4 py-3 font-medium">
-                                    <SortableHeader label="SKU" sortField="sku" currentSort={filters.sort} currentDirection={filters.direction} />
+                                    <SortableHeader label="Product" sortField="name" currentSort={filters.sort} currentDirection={filters.direction} />
                                 </th>
                                 <th className="px-4 py-3 font-medium">Brand</th>
                                 <th className="px-4 py-3 font-medium">Categories</th>
@@ -269,38 +270,53 @@ export default function ProductsIndex({
                                 </th>
                                 <th className="px-4 py-3 font-medium">Status</th>
                                 <th className="px-4 py-3 font-medium">Featured</th>
-                                <th className="px-4 py-3 font-medium">Actions</th>
+                                <th className="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {products.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} className="px-4 py-8 text-center text-neutral-500">
+                                    <td colSpan={9} className="px-4 py-8 text-center text-neutral-500">
                                         No products found.
                                     </td>
                                 </tr>
                             ) : (
                                 products.data.map((product) => (
                                     <tr key={product.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                                        <td className="px-4 py-3 font-medium">
-                                            <div className="flex items-center gap-2">
-                                                {product.name}
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                        product.type === 'variable'
-                                                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                                            : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
-                                                    }`}
-                                                >
-                                                    {product.type === 'variable' ? `${product.variants_count} variants` : 'Simple'}
-                                                </span>
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-                                                    <Image className="h-3 w-3" />
-                                                    {product.images_count}
-                                                </span>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                {product.primary_image ? (
+                                                    <img
+                                                        src={product.primary_image}
+                                                        alt={product.name}
+                                                        className="h-11 w-11 shrink-0 rounded-lg border object-cover"
+                                                    />
+                                                ) : (
+                                                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-sm font-bold dark:bg-neutral-800">
+                                                        {product.name.charAt(0).toUpperCase()}
+                                                    </span>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-medium">{product.name}</p>
+                                                    <p className="truncate text-xs text-neutral-500">{product.sku}</p>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                                                        <span
+                                                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                                                product.type === 'variable'
+                                                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+                                                            }`}
+                                                        >
+                                                            {product.type === 'variable' ? `${product.variants_count} variants` : 'Simple'}
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+                                                            <Image className="h-3 w-3" />
+                                                            {product.images_count}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-neutral-500">{product.sku}</td>
                                         <td className="px-4 py-3 text-neutral-500">{product.brand?.name ?? '-'}</td>
                                         <td className="px-4 py-3">
                                             {product.categories.length > 0 ? (
@@ -317,18 +333,19 @@ export default function ProductsIndex({
                                         </td>
                                         <td className="px-4 py-3">
                                             {product.discounts.length > 0 ? (
-                                                <div className="flex flex-wrap gap-1">
+                                                <div className="flex max-w-56 flex-wrap gap-1">
                                                     {product.discounts.map((d) => (
                                                         <Link
                                                             key={d.id}
                                                             href={route('admin.discounts.show', d.id)}
-                                                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium hover:opacity-80 ${
-                                                                d.type === 'percentage'
-                                                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                                                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                                            }`}
+                                                            title={d.name}
+                                                            className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
                                                         >
-                                                            {d.name} {d.type === 'percentage' ? `${d.value}%` : `$${d.value}`}
+                                                            <Percent className="h-3 w-3 shrink-0 text-neutral-400" />
+                                                            <span className="break-words">{d.name}</span>
+                                                            <span className="shrink-0 font-bold">
+                                                                {d.type === 'percentage' ? `${d.value}%` : `${currencySymbol}${d.value}`}
+                                                            </span>
                                                         </Link>
                                                     ))}
                                                 </div>
@@ -336,12 +353,27 @@ export default function ProductsIndex({
                                                 <span className="text-neutral-400">-</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3">${product.price}</td>
                                         <td className="px-4 py-3">
-                                            <span className={product.quantity <= 0 ? 'font-medium text-red-600' : ''}>{product.quantity}</span>
+                                            <span className="block font-bold tabular-nums">${product.price}</span>
+                                            {product.compare_at_price && Number(product.compare_at_price) > Number(product.price) && (
+                                                <span className="block text-xs text-neutral-400 line-through">${product.compare_at_price}</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <Switch checked={product.is_active} onCheckedChange={() => handleToggle(product)} />
+                                            <span className={`font-semibold tabular-nums ${product.quantity <= 0 ? 'text-red-600' : product.quantity <= 5 ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                                                {product.quantity}
+                                            </span>
+                                            {product.quantity > 0 && product.quantity <= 5 && (
+                                                <span className="block text-[11px] text-neutral-400">Low stock</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <Switch checked={product.is_active} onCheckedChange={() => handleToggle(product)} />
+                                                <span className="text-xs text-neutral-500">
+                                                    {product.is_active ? 'Active' : 'Hidden'}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3">
                                             <button
@@ -358,7 +390,7 @@ export default function ProductsIndex({
                                             </button>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex items-center justify-end gap-1">
                                                 <Link
                                                     href={route('admin.products.show', product.id)}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"

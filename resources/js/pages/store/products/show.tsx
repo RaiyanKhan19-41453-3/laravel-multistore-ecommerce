@@ -3,12 +3,12 @@ import QuantityStepper from '@/components/store/quantity-stepper';
 import StarRating from '@/components/store/star-rating';
 import StoreButton from '@/components/store/store-button';
 import StoreLayout from '@/layouts/store-layout';
-import { apiStore } from '@/lib/auth';
+import { apiStore, getUser } from '@/lib/auth';
 import { formatPrice } from '@/lib/format';
 import { useT } from '@/lib/store';
 import type { ProductDetail, ProductVariant, Review, ReviewSummary } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { Banknote, Check, Heart, MapPin, RotateCcw, ShieldCheck, ShoppingBag, Truck } from 'lucide-react';
+import { BadgeCheck, Banknote, Check, Heart, MapPin, RotateCcw, ShieldCheck, ShoppingBag, Truck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 function findVariant(variants: ProductVariant[], selected: Record<number, number>): ProductVariant | null {
@@ -50,6 +50,10 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
     const [reviewBody, setReviewBody] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
     const [reviewNotice, setReviewNotice] = useState<string | null>(null);
+    const [guestName, setGuestName] = useState('');
+    const [guestEmail, setGuestEmail] = useState('');
+    const [guestOrderNumber, setGuestOrderNumber] = useState('');
+    const isGuestReviewer = getUser() === null;
 
     // Load reviews
     useEffect(() => {
@@ -97,6 +101,38 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
         if (!product || product.type !== 'variable') return null;
         return findVariant(product.variants, selected);
     }, [product, selected]);
+
+    // Gallery follows the selection: any picked option narrows the
+    // variants, and only matching variants' shots show. Nothing picked
+    // (or no match) falls back to the product images.
+    const galleryImages = useMemo(() => {
+        if (product && product.type === 'variable') {
+            const picked = Object.entries(selected);
+            if (picked.length > 0) {
+                const seen = new Set<number>();
+                const matched: { id: number; url: string; alt_text: string | null }[] = [];
+                for (const variant of product.variants) {
+                    const matches = picked.every(
+                        ([attrId, valId]) =>
+                            variant.values.some((val) => val.attribute.id === Number(attrId) && val.id === valId),
+                    );
+                    if (!matches) continue;
+                    for (const img of variant.images ?? []) {
+                        if (!seen.has(img.id)) {
+                            seen.add(img.id);
+                            matched.push({ id: img.id, url: img.url, alt_text: img.alt_text });
+                        }
+                    }
+                }
+                if (matched.length > 0) return matched;
+            }
+        }
+        return (product?.images ?? []).map((img) => ({ id: img.id, url: img.url, alt_text: img.alt_text }));
+    }, [product, selected]);
+
+    useEffect(() => {
+        setSelectedImage(null);
+    }, [selectedVariant?.id]);
 
     const stock = product?.type === 'variable' ? (selectedVariant?.inventory.available ?? 0) : (product?.inventory?.available ?? 0);
     const activeDiscount = useMemo(() => {
@@ -150,8 +186,12 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
         setSubmittingReview(true);
         setReviewNotice(null);
 
+        const guestFields = isGuestReviewer
+            ? { guest_name: guestName, guest_email: guestEmail, order_number: guestOrderNumber }
+            : {};
+
         void apiStore(`/products/${slug}/reviews`, {
-            body: { rating: reviewRating, title: reviewTitle || null, body: reviewBody || null },
+            body: { rating: reviewRating, title: reviewTitle || null, body: reviewBody || null, ...guestFields },
         })
             .then((res) => {
                 setSubmittingReview(false);
@@ -161,6 +201,9 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
                     setReviewTitle('');
                     setReviewBody('');
                     setReviewRating(5);
+                    setGuestName('');
+                    setGuestEmail('');
+                    setGuestOrderNumber('');
                 } else {
                     setReviewNotice(res.message ?? 'Could not submit review.');
                 }
@@ -248,30 +291,16 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
 
                 <div className="grid gap-10 lg:grid-cols-2">
                     {/* Images */}
-                    <div>
-                        <div className="relative aspect-square overflow-hidden rounded-lg border border-[var(--store-border)] bg-[var(--store-card-hover)]">
-                            {(selectedImage ?? product.primary_image) ? (
-                                <img src={selectedImage ?? product.primary_image ?? ''} alt={product.name} className="h-full w-full object-cover" />
-                            ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[var(--store-muted)]">No image</div>
-                            )}
-                            {activeDiscount && (
-                                <span className="absolute top-4 start-4 rounded-lg bg-[var(--store-deal)] px-3 py-1 text-xs font-bold text-white shadow">
-                                    {activeDiscount.type === 'percentage'
-                                        ? `${activeDiscount.value}% ${t('store.sale_badge')}`
-                                        : `${formatPrice(activeDiscount.value)} ${t('store.sale_badge')}`}
-                                </span>
-                            )}
-                        </div>
-                        {product.images.length > 1 && (
-                            <div className="mt-3 flex gap-2.5">
-                                {product.images.map((img) => (
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                        {galleryImages.length > 1 && (
+                            <div className="order-last flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-p-2 pb-2 [scrollbar-width:none] sm:order-first sm:max-h-[560px] sm:w-24 sm:shrink-0 sm:snap-y sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto sm:pb-0 sm:pe-1 [&::-webkit-scrollbar]:hidden">
+                                {galleryImages.map((img) => (
                                     <button
                                         key={img.id}
                                         type="button"
                                         onClick={() => setSelectedImage(img.url)}
-                                        className={`h-20 w-20 overflow-hidden rounded-xl border-2 transition ${
-                                            (selectedImage ?? product.primary_image) === img.url
+                                        className={`h-20 w-20 shrink-0 snap-start overflow-hidden rounded-xl border-2 transition ${
+                                            (selectedImage ?? galleryImages[0]?.url) === img.url
                                                 ? 'border-[var(--store-accent)]'
                                                 : 'border-[var(--store-border)] opacity-70 hover:opacity-100'
                                         }`}
@@ -281,6 +310,22 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
                                 ))}
                             </div>
                         )}
+                        <div className="relative order-first min-w-0 flex-1 sm:order-none">
+                            <div className="relative aspect-square overflow-hidden rounded-lg border border-[var(--store-border)] bg-[var(--store-card-hover)]">
+                                {(selectedImage ?? galleryImages[0]?.url ?? product.primary_image) ? (
+                                    <img src={selectedImage ?? galleryImages[0]?.url ?? product.primary_image ?? ''} alt={product.name} className="h-full w-full object-cover" />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[var(--store-muted)]">No image</div>
+                                )}
+                            {activeDiscount && (
+                                <span className="absolute top-4 start-4 rounded-lg bg-[var(--store-deal)] px-3 py-1 text-xs font-bold text-white shadow">
+                                    {activeDiscount.type === 'percentage'
+                                        ? `${activeDiscount.value}% ${t('store.sale_badge')}`
+                                        : `${formatPrice(activeDiscount.value)} ${t('store.sale_badge')}`}
+                                </span>
+                            )}
+                        </div>
+                    </div>
                     </div>
 
                     {/* Details */}
@@ -437,8 +482,54 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
 
                     {/* Review Form */}
                     {showReviewForm && (
-                        <div className="mt-6 rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6">
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                submitReview();
+                            }}
+                            className="mt-6 rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5 md:p-6"
+                        >
                             <h3 className="mb-4 font-semibold">{t('store.write_review')}</h3>
+                            {isGuestReviewer && (
+                                <>
+                                    <p className="mb-4 rounded-lg bg-[var(--store-accent-soft)] px-3.5 py-2.5 text-xs leading-relaxed text-[var(--store-accent)]">
+                                        {t('store.guest_review_hint')}
+                                    </p>
+                                    <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-medium">{t('store.your_name')}</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={guestName}
+                                                onChange={(e) => setGuestName(e.target.value)}
+                                                className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--store-accent)]"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-sm font-medium">{t('store.email')}</label>
+                                            <input
+                                                type="email"
+                                                required
+                                                value={guestEmail}
+                                                onChange={(e) => setGuestEmail(e.target.value)}
+                                                className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--store-accent)]"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="mb-4">
+                                        <label className="mb-1.5 block text-sm font-medium">{t('store.order_number')}</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={guestOrderNumber}
+                                            onChange={(e) => setGuestOrderNumber(e.target.value)}
+                                            placeholder="ORD-20240101-ABC123"
+                                            className="w-full rounded-xl border border-[var(--store-border)] bg-[var(--store-input)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--store-accent)]"
+                                        />
+                                    </div>
+                                </>
+                            )}
                             <div className="mb-4">
                                 <label className="mb-1.5 block text-sm font-medium">{t('store.rating')}</label>
                                 <StarRating value={reviewRating} onChange={setReviewRating} />
@@ -462,7 +553,7 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
                                 />
                             </div>
                             <StoreButton
-                                onClick={submitReview}
+                                type="submit"
                                 disabled={submittingReview}
                                 size="sm"
                             >
@@ -473,7 +564,7 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
                                     {reviewNotice}
                                 </p>
                             )}
-                        </div>
+                        </form>
                     )}
 
                     {/* Review Summary */}
@@ -518,9 +609,15 @@ export default function ProductShow({ slug, product: initialProduct }: { slug: s
                                 <div key={review.id} className="rounded-lg border border-[var(--store-border)] bg-[var(--store-card)] p-5">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--store-accent-soft)] text-xs font-bold text-[var(--store-accent)]">
-                                            {review.user.name.charAt(0).toUpperCase()}
+                                            {(review.user?.name ?? review.guest_name ?? '?').charAt(0).toUpperCase()}
                                         </span>
-                                        <span className="text-sm font-semibold">{review.user.name}</span>
+                                        <span className="text-sm font-semibold">{review.user?.name ?? review.guest_name ?? 'Guest'}</span>
+                                        {review.verified_purchase && (
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--store-success-soft)] px-2 py-0.5 text-[11px] font-bold text-[var(--store-success)]">
+                                                <BadgeCheck className="h-3 w-3" />
+                                                {t('store.verified_purchase')}
+                                            </span>
+                                        )}
                                         <span className="text-xs text-[var(--store-muted)]">{new Date(review.created_at).toLocaleDateString()}</span>
                                         <span className="ms-auto">
                                             <StarRating value={review.rating} readonly size="sm" />

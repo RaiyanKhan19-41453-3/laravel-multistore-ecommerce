@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAppearance } from '@/hooks/use-appearance';
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { Gem, Monitor, Moon, Palette, Sun, Waves } from 'lucide-react';
 import { HTMLAttributes } from 'react';
 
 export default function AppearanceToggleDropdown({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -13,6 +13,12 @@ export default function AppearanceToggleDropdown({ className = '', ...props }: H
                 return <Moon className="h-5 w-5" />;
             case 'light':
                 return <Sun className="h-5 w-5" />;
+            case 'brand':
+                return <Palette className="h-5 w-5" />;
+            case 'ocean':
+                return <Waves className="h-5 w-5" />;
+            case 'beauty':
+                return <Gem className="h-5 w-5" />;
             default:
                 return <Monitor className="h-5 w-5" />;
         }
@@ -38,6 +44,24 @@ export default function AppearanceToggleDropdown({ className = '', ...props }: H
                         <span className="flex items-center gap-2">
                             <Moon className="h-5 w-5" />
                             Dark
+                        </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => updateAppearance('brand')}>
+                        <span className="flex items-center gap-2">
+                            <Palette className="h-5 w-5" />
+                            Brand
+                        </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => updateAppearance('ocean')}>
+                        <span className="flex items-center gap-2">
+                            <Waves className="h-5 w-5" />
+                            Ocean
+                        </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => updateAppearance('beauty')}>
+                        <span className="flex items-center gap-2">
+                            <Gem className="h-5 w-5" />
+                            Beauty
                         </span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => updateAppearance('system')}>

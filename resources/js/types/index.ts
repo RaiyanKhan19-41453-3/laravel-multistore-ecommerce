@@ -83,6 +83,7 @@ export interface ProductVariant {
     is_active: boolean;
     values: ProductVariantValue[];
     image: string | null;
+    images: { id: number; url: string; alt_text: string | null }[];
     inventory: { quantity: number; available: number; in_stock: boolean };
 }
 
@@ -116,8 +117,10 @@ export interface Review {
     title: string | null;
     body: string | null;
     is_approved: boolean;
+    verified_purchase: boolean;
+    guest_name: string | null;
     created_at: string;
-    user: { id: number; name: string };
+    user: { id: number; name: string } | null;
 }
 
 export interface ReviewSummary {

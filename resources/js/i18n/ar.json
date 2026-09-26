@@ -125,5 +125,14 @@
     "store.seconds_short": "ث",
     "store.delivery_title": "التوصيل",
     "store.delivery_window": "داخل دكا خلال 2-3 أيام، وخارجها خلال 3-5 أيام",
-    "store.no_quick_matches": "لا توجد نتائج سريعة: اضغط Enter للبحث عن"
+    "store.no_quick_matches": "لا توجد نتائج سريعة: اضغط Enter للبحث عن",
+    "store.quick_view": "نظرة سريعة",
+    "store.verified_purchase": "عملية شراء موثقة",
+    "store.guest_review_hint": "لا حاجة لحساب: أدخل الاسم والبريد ورقم الطلب من طلبك الذي تم توصيله وسنتحقق منه.",
+    "store.your_name": "الاسم",
+    "store.email": "البريد",
+    "store.order_number": "رقم الطلب",
+    "store.view_details": "عرض التفاصيل الكاملة",
+    "store.select_option": "اختر خيارًا",
+    "store.close": "إغلاق"
 }

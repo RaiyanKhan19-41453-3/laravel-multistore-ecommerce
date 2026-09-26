@@ -2,6 +2,8 @@
 
 use App\Models\CmsPage;
 use App\Models\Inventory;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\Wishlist;
@@ -27,6 +29,8 @@ it('lists approved reviews for a product', function () {
 it('creates a review when authenticated', function () {
     $user = createUser();
     $product = createProduct();
+    $order = Order::factory()->for($user)->create(['status' => 'delivered']);
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id]);
 
     $response = $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
         'rating' => 4,
@@ -41,7 +45,163 @@ it('creates a review when authenticated', function () {
         'product_id' => $product->id,
         'user_id' => $user->id,
         'is_approved' => false,
+        'verified_purchase' => true,
     ]);
+});
+
+it('rejects reviews without a delivered order', function () {
+    $user = createUser();
+    $product = createProduct();
+
+    $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+    ])->assertStatus(422);
+
+    // Pending orders do not count either.
+    $pending = Order::factory()->for($user)->create(['status' => 'pending']);
+    OrderItem::factory()->for($pending)->create(['product_id' => $product->id]);
+
+    $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+    ])->assertStatus(422);
+
+    expect(Review::where('user_id', $user->id)->count())->toBe(0);
+});
+
+it('lets guest-checkout buyers review after they register', function () {
+    $user = createUser();
+    $product = createProduct();
+
+    $guestOrder = Order::factory()->create([
+        'user_id' => null,
+        'guest_email' => $user->email,
+        'status' => 'delivered',
+    ]);
+    OrderItem::factory()->for($guestOrder)->create(['product_id' => $product->id]);
+
+    $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+    ])->assertCreated();
+
+    $this->assertDatabaseHas('reviews', [
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+        'verified_purchase' => true,
+    ]);
+});
+
+it('lets guests review with a matching delivered order, no account needed', function () {
+    $product = createProduct();
+
+    $order = Order::factory()->create([
+        'user_id' => null,
+        'guest_email' => 'guestreview@example.com',
+        'status' => 'delivered',
+    ]);
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id]);
+
+    $response = $this->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+        'guest_name' => 'Guest Reviewer',
+        'guest_email' => 'guestreview@example.com',
+        'order_number' => $order->order_number,
+    ]);
+
+    $response->assertCreated();
+
+    $this->assertDatabaseHas('reviews', [
+        'product_id' => $product->id,
+        'guest_name' => 'Guest Reviewer',
+        'verified_purchase' => true,
+    ]);
+});
+
+it('rejects guest reviews that do not match a delivered order', function () {
+    $product = createProduct();
+
+    $order = Order::factory()->create([
+        'user_id' => null,
+        'guest_email' => 'buyer@example.com',
+        'status' => 'delivered',
+    ]);
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id]);
+
+    // Wrong order number.
+    $this->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 4,
+        'guest_name' => 'Impostor',
+        'guest_email' => 'buyer@example.com',
+        'order_number' => 'ORD-20000101-XXXXXX',
+    ])->assertStatus(422);
+
+    // Right number, wrong email.
+    $this->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 4,
+        'guest_name' => 'Impostor',
+        'guest_email' => 'someone-else@example.com',
+        'order_number' => $order->order_number,
+    ])->assertStatus(422);
+
+    // Pending orders do not count.
+    $pending = Order::factory()->create([
+        'user_id' => null,
+        'guest_email' => 'waiting@example.com',
+        'status' => 'pending',
+    ]);
+    OrderItem::factory()->for($pending)->create(['product_id' => $product->id]);
+
+    $this->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 4,
+        'guest_name' => 'Waiting Buyer',
+        'guest_email' => 'waiting@example.com',
+        'order_number' => $pending->order_number,
+    ])->assertStatus(422);
+
+    expect(Review::where('product_id', $product->id)->count())->toBe(0);
+});
+
+it('rejects duplicate guest reviews for the same order email', function () {
+    $product = createProduct();
+
+    $order = Order::factory()->create([
+        'user_id' => null,
+        'guest_email' => 'repeat@example.com',
+        'status' => 'delivered',
+    ]);
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id]);
+
+    $payload = [
+        'rating' => 5,
+        'guest_name' => 'Repeat Buyer',
+        'guest_email' => 'repeat@example.com',
+        'order_number' => $order->order_number,
+    ];
+
+    $this->postJson("/api/products/{$product->slug}/reviews", $payload)->assertCreated();
+    $this->postJson("/api/products/{$product->slug}/reviews", $payload)->assertStatus(422);
+});
+
+it('blocks a second review after registering with the same email', function () {
+    $user = createUser();
+    $product = createProduct();
+
+    $order = Order::factory()->create([
+        'user_id' => null,
+        'guest_email' => $user->email,
+        'status' => 'delivered',
+    ]);
+    OrderItem::factory()->for($order)->create(['product_id' => $product->id]);
+
+    $this->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 5,
+        'guest_name' => 'Soon Registered',
+        'guest_email' => $user->email,
+        'order_number' => $order->order_number,
+    ])->assertCreated();
+
+    $this->actingAs($user)->postJson("/api/products/{$product->slug}/reviews", [
+        'rating' => 4,
+    ])->assertStatus(422);
 });
 
 it('rejects duplicate review from same user', function () {
@@ -92,6 +252,24 @@ it('validates review rating range', function () {
     ]);
 
     $response->assertStatus(422);
+});
+
+it('hides approved but unverified reviews everywhere', function () {
+    $product = createProduct();
+    Review::factory()->create([
+        'product_id' => $product->id,
+        'user_id' => createUser()->id,
+        'rating' => 1,
+        'is_approved' => true,
+        'verified_purchase' => false,
+    ]);
+
+    $this->getJson("/api/products/{$product->slug}/reviews")->assertOk()
+        ->assertJsonPath('data.summary.total', 0);
+
+    $response = $this->getJson('/api/products');
+    $productData = collect($response->json('data.data'))->firstWhere('id', $product->id);
+    expect($productData['review_summary']['total'])->toBe(0);
 });
 
 it('adds product to wishlist', function () {

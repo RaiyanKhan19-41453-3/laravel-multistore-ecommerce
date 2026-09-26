@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
+import { useStore } from '@/lib/store';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -120,6 +121,7 @@ function CouponForm({ discount, coupon, onClose }: { discount: Discount; coupon?
 }
 
 export default function DiscountShow({ discount }: { discount: Discount }) {
+    const { currencySymbol } = useStore();
     const [showCreateCoupon, setShowCreateCoupon] = useState(false);
     const [editCoupon, setEditCoupon] = useState<Coupon | null>(null);
 
@@ -134,7 +136,7 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
     };
 
     const formatValue = () => {
-        return discount.type === 'percentage' ? `${discount.value}%` : `$${discount.value}`;
+        return discount.type === 'percentage' ? `${discount.value}%` : `${currencySymbol}${discount.value}`;
     };
 
     const getStatus = () => {
@@ -184,13 +186,13 @@ export default function DiscountShow({ discount }: { discount: Discount }) {
                             {discount.max_discount_amount && (
                                 <div className="flex justify-between">
                                     <dt className="text-neutral-500">Max Discount</dt>
-                                    <dd>${discount.max_discount_amount}</dd>
+                                    <dd>{currencySymbol}{discount.max_discount_amount}</dd>
                                 </div>
                             )}
                             {discount.minimum_order_amount && (
                                 <div className="flex justify-between">
                                     <dt className="text-neutral-500">Min Order</dt>
-                                    <dd>${discount.minimum_order_amount}</dd>
+                                    <dd>{currencySymbol}{discount.minimum_order_amount}</dd>
                                 </div>
                             )}
                             {discount.starts_at && (

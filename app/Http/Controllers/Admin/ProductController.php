@@ -28,6 +28,7 @@ class ProductController extends Controller
     public function index(Request $request): Response
     {
         $query = Product::with('brand', 'inventory', 'discounts', 'categories')->withCount('variants', 'images');
+        $query->with(['images' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('sort_order')->limit(1)]);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -106,6 +107,7 @@ class ProductController extends Controller
             'brand' => $product->brand,
             'variants_count' => $product->variants_count,
             'images_count' => $product->images_count,
+            'primary_image' => $product->images->first()?->getUrl('thumbnail'),
             'discounts' => $product->discounts->map(fn ($d) => [
                 'id' => $d->id,
                 'name' => $d->name,

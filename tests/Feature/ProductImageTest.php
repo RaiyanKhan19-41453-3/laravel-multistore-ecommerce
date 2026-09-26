@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -247,4 +248,41 @@ test('non-admin user cannot upload images', function () {
         ]);
 
     $response->assertForbidden();
+});
+
+test('admin can upload multiple images to a variant', function () {
+    $variant = ProductVariant::factory()->create(['product_id' => $this->product->id]);
+    $files = [
+        UploadedFile::fake()->image('variant1.jpg', 800, 600)->size(500),
+        UploadedFile::fake()->image('variant2.jpg', 800, 600)->size(500),
+    ];
+
+    $response = $this->actingAs($this->user)
+        ->post(route('admin.products.images.store', $this->product), [
+            'images' => $files,
+            'product_variant_id' => $variant->id,
+        ]);
+
+    $response->assertRedirect();
+
+    $this->assertDatabaseCount('product_images', 2);
+    expect(
+        ProductImage::where('product_variant_id', $variant->id)->count()
+    )->toBe(2);
+});
+
+it('exposes variant images on product detail for gallery switching', function () {
+    $product = Product::factory()->create(['type' => 'variable', 'is_active' => true]);
+    $variant = ProductVariant::factory()->create(['product_id' => $product->id]);
+
+    $this->actingAs($this->user)
+        ->post(route('admin.products.images.store', $product), [
+            'images' => [UploadedFile::fake()->image('v.jpg', 800, 600)->size(500)],
+            'product_variant_id' => $variant->id,
+        ])->assertRedirect();
+
+    $response = $this->getJson("/api/products/{$product->slug}");
+
+    $response->assertOk();
+    expect($response->json('data.variants.0.images'))->toHaveCount(1);
 });

@@ -11,8 +11,10 @@ interface Review {
     title: string | null;
     body: string | null;
     is_approved: boolean;
+    verified_purchase: boolean;
+    guest_name: string | null;
     created_at: string;
-    user: { id: number; name: string };
+    user: { id: number; name: string } | null;
     product: { id: number; name: string; slug: string };
 }
 
@@ -88,7 +90,16 @@ export default function ReviewsIndex({ reviews, filters }: { reviews: PaginatedD
                                                 {review.product.name}
                                             </a>
                                         </td>
-                                        <td className="px-3 py-2">{review.user.name}</td>
+                                        <td className="px-3 py-2">
+                                            <div className="flex items-center gap-1.5">
+                                                {review.user?.name ?? review.guest_name ?? 'Guest'}
+                                                {review.verified_purchase && (
+                                                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-700">
+                                                        Verified
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="px-3 py-2">
                                             {'★'.repeat(review.rating)}
                                             {'☆'.repeat(5 - review.rating)}

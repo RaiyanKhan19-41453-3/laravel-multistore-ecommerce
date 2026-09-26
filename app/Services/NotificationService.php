@@ -16,6 +16,7 @@ use App\Notifications\OrderPlaced;
 use App\Notifications\OrderShipped;
 use App\Notifications\ReviewApproved;
 use Illuminate\Notifications\AnonymousNotifiable;
+use Illuminate\Support\Facades\Notification;
 
 class NotificationService
 {
@@ -74,11 +75,17 @@ class NotificationService
 
         $review->loadMissing('user', 'product');
 
-        if (! $review->user?->email) {
+        if ($review->user?->email) {
+            $review->user->notify((new ReviewApproved($review))->afterCommit());
+
             return;
         }
 
-        $review->user->notify((new ReviewApproved($review))->afterCommit());
+        // Guest reviewers have no account: route to their order email.
+        if ($review->guest_email) {
+            Notification::route('mail', $review->guest_email)
+                ->notify((new ReviewApproved($review))->afterCommit());
+        }
     }
 
     public function notifyBackInStock(Product $product): void

@@ -30,6 +30,6 @@ class ReviewFactory extends Factory
 
     public function approved(): static
     {
-        return $this->state(fn () => ['is_approved' => true]);
+        return $this->state(fn () => ['is_approved' => true, 'verified_purchase' => true]);
     }
 }

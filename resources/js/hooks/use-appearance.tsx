@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export type Appearance = 'light' | 'dark' | 'system';
+export type Appearance = 'light' | 'dark' | 'system' | 'brand' | 'ocean' | 'beauty';
 
 const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -8,6 +8,9 @@ const applyTheme = (appearance: Appearance) => {
     const isDark = appearance === 'dark' || (appearance === 'system' && prefersDark());
 
     document.documentElement.classList.toggle('dark', isDark);
+    for (const theme of ['brand', 'ocean', 'beauty'] as const) {
+        document.documentElement.classList.toggle(theme, appearance === theme);
+    }
 
     const storefront = document.querySelector('.storefront');
 

@@ -80,6 +80,7 @@ class CategoryController extends Controller
                 'name' => $category->displayName(),
                 'slug' => $category->slug,
                 'description' => $category->displayDescription(),
+                'image' => $category->image ? '/storage/'.ltrim($category->image, '/') : null,
                 'parent' => $category->parent ? [
                     'id' => $category->parent->id,
                     'name' => $category->parent->displayName(),
@@ -103,6 +104,7 @@ class CategoryController extends Controller
             'name' => $category->name,
             'slug' => $category->slug,
             'description' => $category->description,
+            'image' => $category->image ? '/storage/'.ltrim($category->image, '/') : null,
             'children_count' => $category->children_count,
             'children' => $category->children->map(fn ($child) => [
                 'id' => $child->id,

@@ -49,6 +49,7 @@ interface Category {
     id: number;
     name: string;
     slug: string;
+    image?: string | null;
 }
 
 interface Brand {
@@ -462,7 +463,7 @@ export default function StoreIndex({
                                     className="group relative aspect-[3/4] w-[68%] shrink-0 snap-start overflow-hidden rounded-xl transition duration-300 hover:-translate-y-1 hover:shadow-[var(--store-shadow)] sm:w-[36%] lg:w-[22.5%]"
                                 >
                                     <div className="absolute inset-0 transition duration-500 group-hover:scale-105">
-                                        <ProductImage src={null} seed={`cat-${category.slug}`} alt="" />
+                                        <ProductImage src={category.image ?? null} seed={`cat-${category.slug}`} alt="" />
                                     </div>
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
                                     <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">

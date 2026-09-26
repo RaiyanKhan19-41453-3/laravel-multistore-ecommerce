@@ -112,6 +112,44 @@
     --sidebar-ring: hsl(217.2, 91.2%, 59.8%);
 }
 
+/* Brand theme: a light theme with shop identity. Warm paper surfaces,
+   deep green primary, dark green sidebar. Selected explicitly, never
+   from the OS preference. */
+.brand {
+    --background: hsl(40, 22%, 98%);
+    --foreground: hsl(20, 20%, 12%);
+    --card: hsl(0, 0%, 100%);
+    --card-foreground: hsl(20, 20%, 12%);
+    --popover: hsl(0, 0%, 100%);
+    --popover-foreground: hsl(20, 20%, 12%);
+    --primary: hsl(146, 72%, 27%);
+    --primary-foreground: hsl(0, 0%, 100%);
+    --secondary: hsl(40, 18%, 93%);
+    --secondary-foreground: hsl(20, 20%, 12%);
+    --muted: hsl(40, 16%, 93%);
+    --muted-foreground: hsl(28, 10%, 42%);
+    --accent: hsl(140, 42%, 91%);
+    --accent-foreground: hsl(150, 60%, 20%);
+    --destructive: hsl(0, 72%, 51%);
+    --destructive-foreground: hsl(0, 0%, 100%);
+    --border: hsl(36, 16%, 87%);
+    --input: hsl(36, 16%, 84%);
+    --ring: hsl(146, 72%, 27%);
+    --chart-1: hsl(146, 70%, 32%);
+    --chart-2: hsl(36, 90%, 55%);
+    --chart-3: hsl(0, 70%, 55%);
+    --chart-4: hsl(200, 60%, 45%);
+    --chart-5: hsl(280, 45%, 55%);
+    --sidebar-background: hsl(152, 48%, 13%);
+    --sidebar-foreground: hsl(45, 30%, 92%);
+    --sidebar-primary: hsl(0, 0%, 100%);
+    --sidebar-primary-foreground: hsl(152, 55%, 18%);
+    --sidebar-accent: hsl(152, 38%, 20%);
+    --sidebar-accent-foreground: hsl(45, 30%, 92%);
+    --sidebar-border: hsl(152, 32%, 18%);
+    --sidebar-ring: hsl(146, 72%, 40%);
+}
+
 .dark {
     --background: hsl(0, 0%, 3.9%);
     --foreground: hsl(0, 0%, 98%);
@@ -147,6 +185,85 @@
     --sidebar-ring: hsl(217.2, 91.2%, 59.8%);
 }
 
+
+/* Ocean theme: cool slate-blue light with indigo highlights. Works
+   together with nothing else; selected explicitly, never from the OS. */
+.ocean {
+    --background: hsl(210, 28%, 98%);
+    --foreground: hsl(222, 32%, 12%);
+    --card: hsl(0, 0%, 100%);
+    --card-foreground: hsl(222, 32%, 12%);
+    --popover: hsl(0, 0%, 100%);
+    --popover-foreground: hsl(222, 32%, 12%);
+    --primary: hsl(232, 62%, 52%);
+    --primary-foreground: hsl(0, 0%, 100%);
+    --secondary: hsl(215, 25%, 93%);
+    --secondary-foreground: hsl(222, 32%, 12%);
+    --muted: hsl(215, 22%, 93%);
+    --muted-foreground: hsl(220, 12%, 44%);
+    --accent: hsl(230, 70%, 94%);
+    --accent-foreground: hsl(232, 60%, 38%);
+    --destructive: hsl(0, 72%, 51%);
+    --destructive-foreground: hsl(0, 0%, 100%);
+    --border: hsl(216, 20%, 87%);
+    --input: hsl(216, 20%, 83%);
+    --ring: hsl(232, 62%, 52%);
+    --chart-1: hsl(232, 65%, 55%);
+    --chart-2: hsl(190, 70%, 42%);
+    --chart-3: hsl(36, 90%, 55%);
+    --chart-4: hsl(0, 70%, 58%);
+    --chart-5: hsl(280, 55%, 60%);
+    --sidebar-background: hsl(220, 24%, 94%);
+    --sidebar-foreground: hsl(222, 28%, 28%);
+    --sidebar-primary: hsl(232, 62%, 52%);
+    --sidebar-primary-foreground: hsl(0, 0%, 100%);
+    --sidebar-accent: hsl(220, 22%, 89%);
+    --sidebar-accent-foreground: hsl(222, 30%, 24%);
+    --sidebar-border: hsl(216, 20%, 85%);
+    --sidebar-ring: hsl(232, 62%, 52%);
+}
+
+
+
+
+/* Beauty theme: whole pink for cosmetics and personal-care sellers.
+   Every surface blush; deep rose sidebar. */
+.beauty {
+    --background: hsl(340, 60%, 97%);
+    --foreground: hsl(340, 45%, 14%);
+    --card: hsl(342, 55%, 99%);
+    --card-foreground: hsl(340, 45%, 14%);
+    --popover: hsl(342, 55%, 99%);
+    --popover-foreground: hsl(340, 45%, 14%);
+    --primary: hsl(336, 78%, 52%);
+    --primary-foreground: hsl(0, 0%, 100%);
+    --secondary: hsl(340, 55%, 92%);
+    --secondary-foreground: hsl(340, 45%, 14%);
+    --muted: hsl(340, 45%, 92%);
+    --muted-foreground: hsl(340, 20%, 44%);
+    --accent: hsl(338, 70%, 89%);
+    --accent-foreground: hsl(336, 70%, 32%);
+    --destructive: hsl(0, 72%, 51%);
+    --destructive-foreground: hsl(0, 0%, 100%);
+    --border: hsl(340, 40%, 86%);
+    --input: hsl(340, 40%, 82%);
+    --ring: hsl(336, 78%, 52%);
+    --chart-1: hsl(336, 78%, 55%);
+    --chart-2: hsl(320, 70%, 60%);
+    --chart-3: hsl(36, 90%, 58%);
+    --chart-4: hsl(150, 45%, 50%);
+    --chart-5: hsl(210, 65%, 60%);
+    --sidebar-background: hsl(338, 60%, 88%);
+    --sidebar-foreground: hsl(340, 50%, 24%);
+    --sidebar-primary: hsl(336, 78%, 52%);
+    --sidebar-primary-foreground: hsl(0, 0%, 100%);
+    --sidebar-accent: hsl(340, 55%, 83%);
+    --sidebar-accent-foreground: hsl(340, 50%, 22%);
+    --sidebar-border: hsl(340, 45%, 81%);
+    --sidebar-ring: hsl(336, 78%, 52%);
+}
+
+
 @layer base {
     * {
         @apply border-border;
@@ -155,4 +272,63 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+/* Themed scrollbars: thin, rounded, tinted per theme. Elements that
+   deliberately hide scrollbars keep their own rules. */
+:root {
+    color-scheme: light;
+    --scroll-thumb: hsl(0, 0%, 78%);
+    --scroll-thumb-hover: hsl(0, 0%, 66%);
+}
+
+.dark {
+    color-scheme: dark;
+    --scroll-thumb: hsl(0, 0%, 30%);
+    --scroll-thumb-hover: hsl(0, 0%, 42%);
+}
+
+.brand {
+    color-scheme: light;
+    --scroll-thumb: hsl(145, 22%, 68%);
+    --scroll-thumb-hover: hsl(146, 35%, 45%);
+}
+
+.ocean {
+    color-scheme: light;
+    --scroll-thumb: hsl(220, 18%, 70%);
+    --scroll-thumb-hover: hsl(232, 45%, 55%);
+}
+
+.beauty {
+    color-scheme: light;
+    --scroll-thumb: hsl(340, 45%, 72%);
+    --scroll-thumb-hover: hsl(336, 65%, 55%);
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }

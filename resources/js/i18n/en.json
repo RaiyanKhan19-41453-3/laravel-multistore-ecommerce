@@ -125,5 +125,14 @@
     "store.seconds_short": "SEC",
     "store.delivery_title": "Delivery",
     "store.delivery_window": "Inside Dhaka in 2-3 days, outside Dhaka in 3-5 days",
-    "store.no_quick_matches": "No quick matches: press Enter to search for"
+    "store.no_quick_matches": "No quick matches: press Enter to search for",
+    "store.quick_view": "Quick view",
+    "store.verified_purchase": "Verified purchase",
+    "store.guest_review_hint": "No account needed: enter the name, email, and order number from your delivered order and we will verify it.",
+    "store.your_name": "Your name",
+    "store.email": "Email",
+    "store.order_number": "Order number",
+    "store.view_details": "View full details",
+    "store.select_option": "Select an option",
+    "store.close": "Close"
 }

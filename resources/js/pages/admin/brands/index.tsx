@@ -16,8 +16,10 @@ interface Brand {
     name: string;
     slug: string;
     description: string | null;
+    logo: string | null;
     is_active: boolean;
     sort_order: number;
+    products_count: number;
 }
 
 interface PaginatedBrands {
@@ -36,18 +38,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 function BrandForm({ brand, onClose }: { brand?: Brand | null; onClose: () => void }) {
     const isEdit = !!brand;
 
-    const { data, setData, post, put, errors, processing } = useForm({
+    const { data, setData, post, errors, processing, transform } = useForm({
         name: brand?.name ?? '',
         slug: brand?.slug ?? '',
         description: brand?.description ?? '',
         is_active: brand?.is_active ?? true,
         sort_order: brand?.sort_order ?? 0,
+        logo_file: null as File | null,
+        remove_logo: false as boolean,
     });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         if (isEdit) {
-            put(route('admin.brands.update', brand.id), {
+            // POST with spoofed PUT: PHP discards multipart bodies on real
+            // PUT requests, so the logo would never arrive otherwise.
+            transform((formData) => ({ ...formData, _method: 'PUT' }));
+            post(route('admin.brands.update', brand.id), {
                 onSuccess: () => onClose(),
             });
         } else {
@@ -83,6 +90,42 @@ function BrandForm({ brand, onClose }: { brand?: Brand | null; onClose: () => vo
                     className="flex min-h-[60px] w-full rounded-md border border-neutral-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-neutral-500 focus:border-neutral-950 focus:outline-none focus:ring-1 focus:ring-neutral-950 dark:border-neutral-800 dark:placeholder:text-neutral-400 dark:focus:border-neutral-100 dark:focus:ring-neutral-100"
                 />
                 <InputError className="mt-2" message={errors.description} />
+            </div>
+
+            <div className="grid gap-2">
+                <Label htmlFor="logo">Logo</Label>
+                <div className="flex items-center gap-3">
+                    {brand?.logo && !data.logo_file && !data.remove_logo && (
+                        <img
+                            src={brand.logo.startsWith('/') || brand.logo.startsWith('http') ? brand.logo : `/storage/${brand.logo}`}
+                            alt={brand.name}
+                            className="h-12 w-12 rounded-lg border object-cover"
+                        />
+                    )}
+                    <Input
+                        id="logo"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => {
+                            setData('logo_file', e.target.files?.[0] ?? null);
+                            setData('remove_logo', false);
+                        }}
+                        className="cursor-pointer"
+                    />
+                    {isEdit && brand?.logo && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setData('logo_file', null);
+                                setData('remove_logo', !data.remove_logo);
+                            }}
+                        >
+                            {data.remove_logo ? 'Keep logo' : 'Remove'}
+                        </Button>
+                    )}
+                </div>
+                <InputError className="mt-2" message={errors.logo_file} />
             </div>
 
             <div className="flex items-center gap-4">
@@ -146,32 +189,61 @@ export default function BrandsIndex({ brands }: { brands: PaginatedBrands }) {
                     <table className="w-full text-left text-sm">
                         <thead className="border-b bg-neutral-50 dark:bg-neutral-800">
                             <tr>
-                                <th className="px-4 py-3 font-medium">Name</th>
-                                <th className="px-4 py-3 font-medium">Slug</th>
+                                <th className="px-4 py-3 font-medium">Brand</th>
+                                <th className="px-4 py-3 font-medium">Products</th>
                                 <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium">Actions</th>
+                                <th className="px-4 py-3 font-medium">Sort</th>
+                                <th className="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {brands.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-4 py-8 text-center text-neutral-500">
+                                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-500">
                                         No brands yet. Create your first brand to get started.
                                     </td>
                                 </tr>
                             ) : (
                                 brands.data.map((brand) => (
                                     <tr key={brand.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                                        <td className="px-4 py-3 font-medium">{brand.name}</td>
-                                        <td className="px-4 py-3 text-neutral-500">{brand.slug}</td>
                                         <td className="px-4 py-3">
-                                            <Switch
-                                                checked={brand.is_active}
-                                                onCheckedChange={() => handleToggle(brand)}
-                                            />
+                                            <div className="flex items-center gap-3">
+                                                {brand.logo ? (
+                                                    <img
+                                                        src={brand.logo.startsWith('/') || brand.logo.startsWith('http') ? brand.logo : `/storage/${brand.logo}`}
+                                                        alt={brand.name}
+                                                        className="h-9 w-9 shrink-0 rounded-lg border object-cover"
+                                                    />
+                                                ) : (
+                                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-sm font-bold dark:bg-neutral-800">
+                                                        {brand.name.charAt(0).toUpperCase()}
+                                                    </span>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-medium">{brand.name}</p>
+                                                    <p className="truncate text-xs text-neutral-500">{brand.slug}</p>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <div className="flex items-center gap-1">
+                                            <span className="inline-flex min-w-8 justify-center rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-semibold tabular-nums dark:bg-neutral-800">
+                                                {brand.products_count}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    checked={brand.is_active}
+                                                    onCheckedChange={() => handleToggle(brand)}
+                                                />
+                                                <span className="text-xs text-neutral-500">
+                                                    {brand.is_active ? 'Active' : 'Hidden'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm tabular-nums text-neutral-500">{brand.sort_order}</td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => setEditBrand(brand)}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"

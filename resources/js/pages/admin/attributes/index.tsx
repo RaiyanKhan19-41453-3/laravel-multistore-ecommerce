@@ -212,11 +212,11 @@ export default function AttributesIndex({ attributes }: { attributes: Attribute[
                         <thead className="border-b bg-neutral-50 dark:bg-neutral-800">
                             <tr>
                                 <th className="w-8 px-4 py-3"></th>
-                                <th className="px-4 py-3 font-medium">Name</th>
-                                <th className="px-4 py-3 font-medium">Slug</th>
+                                <th className="px-4 py-3 font-medium">Attribute</th>
                                 <th className="px-4 py-3 font-medium">Values</th>
                                 <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium">Actions</th>
+                                <th className="px-4 py-3 font-medium">Sort</th>
+                                <th className="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -235,14 +235,38 @@ export default function AttributesIndex({ attributes }: { attributes: Attribute[
                                                     {expandedIds.includes(attribute.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                                 </button>
                                             </td>
-                                            <td className="px-4 py-3 font-medium">{attribute.name}</td>
-                                            <td className="px-4 py-3 text-neutral-500">{attribute.slug}</td>
-                                            <td className="px-4 py-3 text-neutral-500">{attribute.values.length}</td>
                                             <td className="px-4 py-3">
-                                                <Switch checked={attribute.is_active} onCheckedChange={() => handleToggleAttr(attribute)} />
+                                                <div className="flex items-center gap-3">
+                                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-sm font-bold dark:bg-neutral-800">
+                                                        {attribute.name.charAt(0).toUpperCase()}
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <p className="truncate font-medium">{attribute.name}</p>
+                                                        <p className="truncate text-xs text-neutral-500">{attribute.slug}</p>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="inline-flex min-w-8 justify-center rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-semibold tabular-nums dark:bg-neutral-800">
+                                                        {attribute.values.length}
+                                                    </span>
+                                                    <span className="text-xs text-neutral-500">
+                                                        {attribute.values.filter((v) => v.is_active).length} active
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Switch checked={attribute.is_active} onCheckedChange={() => handleToggleAttr(attribute)} />
+                                                    <span className="text-xs text-neutral-500">
+                                                        {attribute.is_active ? 'Active' : 'Hidden'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm tabular-nums text-neutral-500">{attribute.sort_order}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center justify-end gap-1">
                                                     <button
                                                         onClick={() => {
                                                             setEditAttribute(attribute);

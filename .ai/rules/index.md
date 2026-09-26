@@ -23,6 +23,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Models/Plan.php, app/Models/Subscription.php, app/Models/Store.php, app/Http/Middleware/EnsureStoreSubscription.php | .ai/rules/models-http-middleware.md |
 | app/Models/Shipping*.php, app/Models/CmsPage.php, app/Models/*.php | .ai/rules/models.md |
 | app/Observers/*.php | .ai/rules/observers.md |
+| resources/js/pages/admin/** | .ai/rules/pages-admin.md |
 | resources/js/pages/** | .ai/rules/pages.md |
 | app/Services/PaymentGateways/*.php | .ai/rules/payment-gateways.md |
 | resources/js/pages/store/products/index.tsx | .ai/rules/products.md |

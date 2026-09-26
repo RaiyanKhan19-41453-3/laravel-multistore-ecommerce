@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Support\CurrentStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -18,6 +19,7 @@ class BrandController extends Controller
     {
         $brands = Brand::orderBy('sort_order')
             ->orderBy('name')
+            ->withCount('products')
             ->paginate(15)
             ->withQueryString();
 
@@ -36,9 +38,19 @@ class BrandController extends Controller
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
+            'logo_file' => 'nullable|file|image|max:2048',
+            'remove_logo' => 'nullable|boolean',
         ]);
 
         $validated['slug'] = Str::slug($validated['slug'] ?? $validated['name']);
+
+        if ($request->hasFile('logo_file')) {
+            $validated['logo'] = $request->file('logo_file')->store('brand-logos', 'public');
+        } elseif ($request->boolean('remove_logo')) {
+            $validated['logo'] = null;
+        }
+
+        unset($validated['logo_file'], $validated['remove_logo']);
 
         Brand::create($validated);
 
@@ -55,9 +67,21 @@ class BrandController extends Controller
             'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
             'sort_order' => 'integer|min:0',
+            'logo_file' => 'nullable|file|image|max:2048',
+            'remove_logo' => 'nullable|boolean',
         ]);
 
         $validated['slug'] = Str::slug($validated['slug'] ?? $validated['name']);
+
+        if ($request->hasFile('logo_file')) {
+            $this->deleteFile($brand->logo);
+            $validated['logo'] = $request->file('logo_file')->store('brand-logos', 'public');
+        } elseif ($request->boolean('remove_logo')) {
+            $this->deleteFile($brand->logo);
+            $validated['logo'] = null;
+        }
+
+        unset($validated['logo_file'], $validated['remove_logo']);
 
         $brand->update($validated);
 
@@ -76,5 +100,18 @@ class BrandController extends Controller
         $brand->delete();
 
         return to_route('admin.brands.index');
+    }
+
+    private function deleteFile(?string $path): void
+    {
+        if (! $path) {
+            return;
+        }
+
+        $relative = ltrim((string) preg_replace('#^(/storage/|storage/)#', '', $path), '/');
+
+        if ($relative !== '') {
+            Storage::disk('public')->delete($relative);
+        }
     }
 }

@@ -10,6 +10,8 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Store;
 use App\Support\AdminStoreContext;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 function attachStoreMember($user, Store $store, string $role = 'owner'): void
 {
@@ -541,4 +543,41 @@ it('anchors admin creations to the session store despite a poisoned header', fun
     ], ['X-Store-Slug' => 'wctx-b'])->assertSessionHasNoErrors();
 
     $this->assertDatabaseHas('products', ['slug' => 'anchored-product', 'store_id' => $storeA->id]);
+});
+
+it('uploads category cover images and exposes them in the api', function () {
+    Storage::fake('public');
+    $admin = createAdmin();
+
+    $this->actingAs($admin)->post('/admin/categories', [
+        'name' => 'Imaged Cat',
+        'image_file' => UploadedFile::fake()->image('cover.jpg', 800, 600)->size(80),
+    ])->assertRedirect('/admin/categories');
+
+    $category = Category::where('slug', 'imaged-cat')->firstOrFail();
+    expect($category->image)->toStartWith('categories/');
+    Storage::disk('public')->assertExists($category->image);
+
+    $this->getJson("/api/categories/{$category->slug}")->assertOk()
+        ->assertJsonPath('data.image', '/storage/'.$category->image);
+});
+
+it('uploads brand logos and replaces them on update', function () {
+    Storage::fake('public');
+    $admin = createAdmin();
+
+    $this->actingAs($admin)->post('/admin/brands', [
+        'name' => 'Logo Brand',
+    ])->assertRedirect('/admin/brands');
+
+    $brand = Brand::where('slug', 'logo-brand')->firstOrFail();
+
+    $this->actingAs($admin)->post("/admin/brands/{$brand->id}", [
+        '_method' => 'PUT',
+        'name' => 'Logo Brand',
+        'logo_file' => UploadedFile::fake()->image('logo.jpg', 500, 500)->size(60),
+    ])->assertRedirect('/admin/brands');
+
+    expect($brand->fresh()->logo)->toStartWith('brand-logos/');
+    Storage::disk('public')->assertExists($brand->fresh()->logo);
 });

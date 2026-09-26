@@ -52,9 +52,12 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/wishlist/check', [WishlistController::class, 'check']);
     Route::post('/wishlist/{slug}/toggle', [WishlistController::class, 'toggle']);
     Route::delete('/wishlist/{wishlist}', [WishlistController::class, 'destroy']);
-
-    Route::post('/products/{slug}/reviews', [ReviewController::class, 'store']);
 });
+
+// Reviews accept verified guests too (order-verified, no account needed),
+// so this stays outside auth. Throttled: approval queue is not a spam target.
+Route::post('/products/{slug}/reviews', [ReviewController::class, 'store'])
+    ->middleware('throttle:20,1');
 
 Route::middleware(['api.cart', 'throttle:30,1'])->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'store']);

@@ -228,3 +228,19 @@ it('renders the cancellation reason in the cancelled mail', function () {
 
     expect(implode("\n", $mail->introLines))->toContain('Out of stock');
 });
+
+it('emails guest reviewers on approval via their order email', function () {
+    Notification::fake();
+    $admin = createAdmin();
+    $review = Review::factory()->create([
+        'user_id' => null,
+        'guest_name' => 'Guest Buyer',
+        'guest_email' => 'guestbuyer@example.com',
+        'is_approved' => false,
+        'verified_purchase' => true,
+    ]);
+
+    $this->actingAs($admin)->post("/admin/reviews/{$review->id}/approve")->assertRedirect();
+
+    Notification::assertSentOnDemand(ReviewApproved::class, fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'guestbuyer@example.com');
+});
