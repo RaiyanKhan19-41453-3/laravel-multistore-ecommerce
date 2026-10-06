@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Courier;
 use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -9,12 +8,14 @@ use App\Models\Shipment;
 use App\Models\Store;
 use App\Models\User;
 
-function createWebhookCourier(string $code): Courier
+/**
+ * Couriers are config-managed now; the code is the identity.
+ */
+function createWebhookCourier(string $code): string
 {
-    return Courier::firstOrCreate(
-        ['code' => $code],
-        ['name' => ucfirst(str_replace('_', ' ', $code)), 'is_active' => true, 'sort_order' => 0]
-    );
+    expect(config("couriers.{$code}"))->not->toBeNull();
+
+    return $code;
 }
 
 function createWebhookOrder(string $status = 'pending'): Order
@@ -33,11 +34,11 @@ function createWebhookOrder(string $status = 'pending'): Order
     return $order;
 }
 
-function createWebhookShipment(Order $order, Courier $courier, string $trackingId): Shipment
+function createWebhookShipment(Order $order, string $courierCode, string $trackingId): Shipment
 {
     return Shipment::factory()->create([
         'order_id' => $order->id,
-        'courier_id' => $courier->id,
+        'courier_code' => $courierCode,
         'courier_order_id' => $trackingId,
         'tracking_number' => $trackingId,
         'status' => 'pending',
@@ -394,7 +395,7 @@ it('does not downgrade order status from delivered to shipped', function () {
 
 it('rejects courier webhook with invalid secret', function () {
     $courier = createWebhookCourier('steadfast');
-    $courier->update(['settings' => ['webhook_secret' => 's3cret']]);
+    config()->set('couriers.steadfast.webhook_secret', 's3cret');
     $order = createWebhookOrder('shipped');
     $shipment = createWebhookShipment($order, $courier, 'SF_SECRET_1');
 
@@ -410,7 +411,7 @@ it('rejects courier webhook with invalid secret', function () {
 
 it('accepts courier webhook with valid secret', function () {
     $courier = createWebhookCourier('steadfast');
-    $courier->update(['settings' => ['webhook_secret' => 's3cret']]);
+    config()->set('couriers.steadfast.webhook_secret', 's3cret');
     $order = createWebhookOrder('shipped');
     $shipment = createWebhookShipment($order, $courier, 'SF_SECRET_2');
 

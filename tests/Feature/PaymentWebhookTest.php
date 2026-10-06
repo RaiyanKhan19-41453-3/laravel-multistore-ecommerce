@@ -54,6 +54,53 @@ it('marks order confirmed on payment success webhook', function () {
     expect($inventory->reserved_quantity)->toBe(0);
 });
 
+it('redirects the customer browser to order confirmation on success', function () {
+    $user = User::factory()->create();
+
+    $order = Order::factory()->pending()->for($user)->create(['total' => 500]);
+    $payment = Payment::factory()->for($order)->bkash()->create([
+        'amount' => 500,
+        'gateway' => 'sslcommerz',
+    ]);
+
+    // ?type= marks the customer browser return (success_url); the plain
+    // route stays a JSON ack for server-to-server IPN calls.
+    $response = $this->postJson('/api/payments/webhook/sslcommerz?type=success', [
+        'status' => 'VALID',
+        'tran_id' => $payment->id,
+        'val_id' => 'VAL-123456',
+    ]);
+
+    $response->assertRedirect('/order-confirmation/'.$order->order_number.'?payment=sslcommerz_success');
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $order->id,
+        'status' => 'confirmed',
+    ]);
+});
+
+it('redirects the customer browser to order confirmation on failure', function () {
+    $user = User::factory()->create();
+
+    $order = Order::factory()->pending()->for($user)->create(['total' => 500]);
+    $payment = Payment::factory()->for($order)->bkash()->create([
+        'amount' => 500,
+        'gateway' => 'sslcommerz',
+    ]);
+
+    $response = $this->postJson('/api/payments/webhook/sslcommerz?type=fail', [
+        'status' => 'FAILED',
+        'tran_id' => $payment->id,
+    ]);
+
+    $response->assertRedirect('/order-confirmation/'.$order->order_number.'?payment=sslcommerz_failed');
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $order->id,
+        'status' => 'cancelled',
+    ]);
+});
+
 it('webhook is idempotent', function () {
     $user = User::factory()->create();
     $product = Product::factory()->create(['price' => 500, 'is_active' => true]);

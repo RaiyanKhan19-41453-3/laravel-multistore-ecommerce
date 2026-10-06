@@ -51,6 +51,5 @@ class DatabaseSeeder extends Seeder
         $this->call(DemoMediaSeeder::class);
         $this->call(DiscountSeeder::class);
         $this->call(ShippingSeeder::class);
-        $this->call(CourierSeeder::class);
     }
 }

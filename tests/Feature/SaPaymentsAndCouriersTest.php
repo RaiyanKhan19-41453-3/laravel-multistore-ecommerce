@@ -2,7 +2,6 @@
 
 use App\Models\Cart;
 use App\Models\CartItem;
-use App\Models\Courier;
 use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -397,11 +396,11 @@ it('webhook handles moyasar success and idempotency', function () {
 });
 
 it('smsa and aramex gateways resolve via factory', function () {
-    $smsa = Courier::factory()->create(['code' => 'smsa', 'settings' => ['api_key' => 'test-key']]);
-    $aramex = Courier::factory()->create(['code' => 'aramex', 'settings' => ['account_number' => '123', 'username' => 'u', 'password' => 'p', 'account_pin' => 'pin']]);
+    config()->set('couriers.smsa.settings', ['api_key' => 'test-key']);
+    config()->set('couriers.aramex.settings', ['account_number' => '123', 'username' => 'u', 'password' => 'p', 'account_pin' => 'pin']);
 
-    expect(CourierGatewayFactory::make($smsa))->toBeInstanceOf(SmsaGateway::class);
-    expect(CourierGatewayFactory::make($aramex))->toBeInstanceOf(AramexGateway::class);
+    expect(CourierGatewayFactory::make('smsa'))->toBeInstanceOf(SmsaGateway::class);
+    expect(CourierGatewayFactory::make('aramex'))->toBeInstanceOf(AramexGateway::class);
     expect(CourierGatewayFactory::supportsApi('smsa'))->toBeTrue();
     expect(CourierGatewayFactory::supportsApi('aramex'))->toBeTrue();
 });
@@ -411,12 +410,12 @@ it('smsa creates shipment via http fake', function () {
         'ecom.smsaexpress.com/api/shipment/b2c' => Http::response(['awb' => 'SMSA123456', 'consignmentId' => 'SMSA123456', 'price' => 25], 200),
     ]);
 
-    $courier = Courier::factory()->create(['code' => 'smsa', 'settings' => ['api_key' => 'test-key']]);
+    config()->set('couriers.smsa.settings', ['api_key' => 'test-key']);
     $order = Order::factory()->create(['total' => 500, 'shipping_name' => 'Ahmed', 'shipping_phone' => '0501234567', 'shipping_city' => 'Riyadh', 'shipping_country' => 'SA']);
     OrderItem::factory()->for($order)->create();
     $shipment = Shipment::factory()->make();
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('smsa');
     $result = $gateway->createShipment($order->load('items'), $shipment);
 
     expect($result['tracking_number'])->toBe('SMSA123456');
@@ -427,12 +426,12 @@ it('aramex creates shipment via http fake', function () {
         'ws.aramex.net/ShippingAPI.V2/Shipping/Service_1_0.svc/json/CreateShipments' => Http::response(['HasErrors' => false, 'Shipments' => [['ID' => 'ARAMEX789', 'AWBNumber' => 'ARAMEX789']]], 200),
     ]);
 
-    $courier = Courier::factory()->create(['code' => 'aramex', 'settings' => ['account_number' => '123', 'username' => 'u', 'password' => 'p', 'account_pin' => 'pin']]);
+    config()->set('couriers.aramex.settings', ['account_number' => '123', 'username' => 'u', 'password' => 'p', 'account_pin' => 'pin']);
     $order = Order::factory()->create(['total' => 600, 'shipping_name' => 'Ahmed', 'shipping_phone' => '0501234567', 'shipping_city' => 'Jeddah', 'shipping_country' => 'SA']);
     OrderItem::factory()->for($order)->create();
     $shipment = Shipment::factory()->make();
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('aramex');
     $result = $gateway->createShipment($order->load('items'), $shipment);
 
     expect($result['tracking_number'])->toBe('ARAMEX789');

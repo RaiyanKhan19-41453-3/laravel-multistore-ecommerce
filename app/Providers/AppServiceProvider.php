@@ -13,7 +13,6 @@ use App\Models\Category;
 use App\Models\CmsPage;
 use App\Models\Coupon;
 use App\Models\CouponRedemption;
-use App\Models\Courier;
 use App\Models\Discount;
 use App\Models\HeroSlide;
 use App\Models\HomepageSection;
@@ -99,7 +98,6 @@ class AppServiceProvider extends ServiceProvider
             ShippingMethod::class,
             ShippingZone::class,
             ShippingRate::class,
-            Courier::class,
             CmsPage::class,
             MenuItem::class,
             HomepageSection::class,

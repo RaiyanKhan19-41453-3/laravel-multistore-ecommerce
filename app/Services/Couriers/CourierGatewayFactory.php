@@ -2,7 +2,6 @@
 
 namespace App\Services\Couriers;
 
-use App\Models\Courier;
 use App\Services\Couriers\Gateways\AramexGateway;
 use App\Services\Couriers\Gateways\CourierGateway;
 use App\Services\Couriers\Gateways\ECourierGateway;
@@ -28,9 +27,66 @@ class CourierGatewayFactory
         'aramex' => AramexGateway::class,
     ];
 
-    public static function make(Courier $courier): ?CourierGateway
+    /**
+     * Courier catalog for admin display, in configured order.
+     *
+     * @return array<int, array{code: string, name: string, enabled: bool, configured: bool, supports_api: bool}>
+     */
+    public static function catalog(): array
     {
-        $code = strtolower($courier->code);
+        $couriers = config('couriers', []);
+        $rows = [];
+
+        foreach ($couriers as $code => $courier) {
+            $rows[] = [
+                'code' => $code,
+                'name' => $courier['name'] ?? $code,
+                'enabled' => (bool) ($courier['enabled'] ?? false),
+                'configured' => self::isConfigured((string) $code),
+                'supports_api' => self::supportsApi((string) $code),
+            ];
+        }
+
+        return $rows;
+    }
+
+    public static function isEnabled(string $courierCode): bool
+    {
+        return (bool) config('couriers.'.strtolower($courierCode).'.enabled', false);
+    }
+
+    /**
+     * All required credential fields present (empty values do not count).
+     */
+    public static function isConfigured(string $courierCode): bool
+    {
+        $code = strtolower($courierCode);
+
+        if (! isset(self::$gatewayMap[$code])) {
+            return $code === 'other';
+        }
+
+        $settings = config("couriers.{$code}.settings", []) ?? [];
+
+        foreach (self::getSettingsSchema($code) as $field) {
+            if (($field['required'] ?? false) && empty($settings[$field['key']])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public static function settingsFor(string $courierCode): array
+    {
+        $settings = config('couriers.'.strtolower($courierCode).'.settings', []) ?? [];
+
+        return array_filter($settings, fn ($value) => $value !== null && $value !== '');
+    }
+
+    public static function make(string $courierCode): ?CourierGateway
+    {
+        $code = strtolower($courierCode);
 
         $class = self::$gatewayMap[$code] ?? null;
 
@@ -38,13 +94,11 @@ class CourierGatewayFactory
             return null;
         }
 
-        $settings = $courier->settings ?? [];
-
-        if (empty($settings)) {
+        if (! self::isEnabled($code) || ! self::isConfigured($code)) {
             return null;
         }
 
-        return new $class($settings);
+        return new $class(self::settingsFor($code));
     }
 
     public static function supportsApi(string $courierCode): bool

@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Plan;
 use App\Models\Product;
@@ -149,11 +148,10 @@ it('lets courier webhooks through when enforcement is on, whatever the default s
     // resolution falls back to it, and webhooks must still get through.
     Store::default()?->update(['created_at' => now()->subDays(60), 'updated_at' => now()->subDays(60)]);
 
-    $courier = Courier::factory()->create(['code' => 'pathao', 'store_id' => $storeB->id]);
     $order = Order::factory()->create(['status' => 'shipped', 'store_id' => $storeB->id]);
     $shipment = Shipment::factory()->create([
         'order_id' => $order->id,
-        'courier_id' => $courier->id,
+        'courier_code' => 'pathao',
         'courier_order_id' => 'PATHAO-WH',
         'status' => 'in_transit',
         'store_id' => $storeB->id,

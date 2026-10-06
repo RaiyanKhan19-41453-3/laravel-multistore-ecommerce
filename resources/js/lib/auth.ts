@@ -45,11 +45,12 @@ export function clearAuth(): void {
 
 export async function apiStore<T = unknown>(
     path: string,
-    options: { method?: string; body?: unknown } = {},
+    options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<{ ok: boolean; data: T | null; message?: string; errors?: Record<string, string[]> }> {
     const headers: Record<string, string> = {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        ...(options.headers ?? {}),
     };
 
     const csrf = getCookie('XSRF-TOKEN');

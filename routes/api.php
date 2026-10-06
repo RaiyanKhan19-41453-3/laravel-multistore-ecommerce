@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\HomepageController;
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentMethodController;
+use App\Http\Controllers\Api\PaymentRetryController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReviewController;
@@ -62,6 +63,9 @@ Route::post('/products/{slug}/reviews', [ReviewController::class, 'store'])
 Route::middleware(['api.cart', 'throttle:30,1'])->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'store']);
 });
+
+Route::post('/orders/{order_number}/retry-payment', [PaymentRetryController::class, 'store'])
+    ->middleware('throttle:10,1');
 
 Route::middleware(['throttle:5,1'])->group(function () {
     Route::post('/orders/lookup', [OrderController::class, 'lookup']);

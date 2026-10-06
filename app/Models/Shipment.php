@@ -18,7 +18,7 @@ class Shipment extends Model
 
     protected $fillable = [
         'order_id',
-        'courier_id',
+        'courier_code',
         'courier',
         'tracking_number',
         'courier_order_id',
@@ -41,11 +41,6 @@ class Shipment extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
-    }
-
-    public function courierRelation(): BelongsTo
-    {
-        return $this->belongsTo(Courier::class);
     }
 
     public function isDelivered(): bool

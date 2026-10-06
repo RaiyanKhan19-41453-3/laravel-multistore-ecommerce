@@ -2,7 +2,6 @@
 
 namespace App\Services\Couriers;
 
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Services\OrderService;
@@ -17,17 +16,17 @@ class CourierService
     /**
      * Send an order to the courier API.
      */
-    public function sendToCourier(Order $order, Courier $courier): Shipment
+    public function sendToCourier(Order $order, string $courierCode, string $courierName): Shipment
     {
-        $gateway = CourierGatewayFactory::make($courier);
+        $gateway = CourierGatewayFactory::make($courierCode);
 
         if (! $gateway) {
-            throw new \RuntimeException("Courier '{$courier->name}' is not configured or does not support API integration.");
+            throw new \RuntimeException("Courier '{$courierName}' is not configured or does not support API integration.");
         }
 
         $shipment = $order->shipments()->create([
-            'courier_id' => $courier->id,
-            'courier' => $courier->name,
+            'courier_code' => $courierCode,
+            'courier' => $courierName,
             'status' => 'pending',
         ]);
 
@@ -50,7 +49,7 @@ class CourierService
 
             Log::info('Order sent to courier', [
                 'order_id' => $order->id,
-                'courier' => $courier->name,
+                'courier' => $courierName,
                 'consignment_id' => $result['consignment_id'],
             ]);
 
@@ -63,7 +62,7 @@ class CourierService
 
             Log::error('Failed to send order to courier', [
                 'order_id' => $order->id,
-                'courier' => $courier->name,
+                'courier' => $courierName,
                 'error' => $e->getMessage(),
             ]);
 
@@ -76,15 +75,14 @@ class CourierService
      */
     public function trackShipment(Shipment $shipment): array
     {
-        if (! $shipment->courier_id || ! $shipment->tracking_number) {
+        if (! $shipment->courier_code || ! $shipment->tracking_number) {
             throw new \RuntimeException('Shipment has no courier or tracking number.');
         }
 
-        $courier = $shipment->courierRelation;
-        $gateway = CourierGatewayFactory::make($courier);
+        $gateway = CourierGatewayFactory::make($shipment->courier_code);
 
         if (! $gateway) {
-            throw new \RuntimeException("Courier '{$courier->name}' does not support API tracking.");
+            throw new \RuntimeException("Courier '{$shipment->courier}' does not support API tracking.");
         }
 
         $result = $gateway->trackShipment($shipment->tracking_number);
@@ -100,9 +98,9 @@ class CourierService
     /**
      * Test courier API connection.
      */
-    public function testConnection(Courier $courier): bool
+    public function testConnection(string $courierCode): bool
     {
-        $gateway = CourierGatewayFactory::make($courier);
+        $gateway = CourierGatewayFactory::make($courierCode);
 
         if (! $gateway) {
             return false;

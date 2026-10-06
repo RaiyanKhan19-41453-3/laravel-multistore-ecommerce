@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Webhooks;
 
 use App\Http\Controllers\Controller;
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\Store;
@@ -27,15 +26,13 @@ class CourierWebhookController extends Controller
         // Courier codes and tracking ids are globally unique: never scope
         // these lookups to the resolved store, or webhooks for other
         // stores' shipments resolve to nothing.
-        $courier = Courier::withoutGlobalScope(BelongsToStore::class)->where('code', $courierCode)->first();
-
-        if (! $courier) {
+        if (! config("couriers.{$courierCode}")) {
             Log::warning("{$courierCode} webhook: courier not found");
 
             return response()->json(['status' => 'ignored']);
         }
 
-        $secret = $courier->settings['webhook_secret'] ?? null;
+        $secret = config("couriers.{$courierCode}.webhook_secret");
 
         if ($secret && ! hash_equals((string) $secret, (string) $request->header('X-Webhook-Secret'))) {
             Log::warning("{$courierCode} webhook: invalid signature");

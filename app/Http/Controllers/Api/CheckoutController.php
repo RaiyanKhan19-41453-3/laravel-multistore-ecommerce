@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\BearerUser;
 use App\Helpers\PhoneHelper;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Services\OrderService;
 use App\Services\PaymentGateways\PaymentGatewayFactory;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Laravel\Sanctum\PersonalAccessToken;
 
 class CheckoutController extends Controller
 {
@@ -21,7 +20,7 @@ class CheckoutController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $bearerUser = $this->resolveBearerUser($request);
+        $bearerUser = BearerUser::fromRequest($request);
         $isGuest = $bearerUser === null;
 
         $validated = $request->validate([
@@ -74,7 +73,17 @@ class CheckoutController extends Controller
                 $validated,
                 $validated['payment_method']
             );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
+        // From here the order exists and the cart is converted: failures
+        // below must carry the order_number so the storefront can offer
+        // retry-payment on the same order instead of a dead end.
+        try {
             $response = [
                 'success' => true,
                 'data' => [
@@ -114,35 +123,24 @@ class CheckoutController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'data' => [
+                    'order' => [
+                        'order_number' => $order->order_number,
+                        'status' => $order->status,
+                    ],
+                ],
             ], 422);
         } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
+                'data' => [
+                    'order' => [
+                        'order_number' => $order->order_number,
+                        'status' => $order->status,
+                    ],
+                ],
             ], 502);
         }
-    }
-
-    private function resolveBearerUser(Request $request): ?User
-    {
-        $token = $request->bearerToken();
-
-        if (! $token) {
-            return null;
-        }
-
-        $accessToken = PersonalAccessToken::findToken($token);
-
-        if (! $accessToken) {
-            return null;
-        }
-
-        if ($accessToken->expires_at && $accessToken->expires_at->isPast()) {
-            return null;
-        }
-
-        $user = $accessToken->tokenable;
-
-        return $user instanceof User ? $user : null;
     }
 }

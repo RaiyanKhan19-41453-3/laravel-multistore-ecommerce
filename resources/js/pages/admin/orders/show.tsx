@@ -77,9 +77,12 @@ interface Order {
 }
 
 interface Courier {
-    id: number;
-    name: string;
     code: string;
+    name: string;
+    enabled: boolean;
+    configured: boolean;
+    supports_api: boolean;
+    shipments_count: number;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -139,7 +142,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
         processing: shipmentProcessing,
         reset: resetShipment,
     } = useForm({
-        courier_id: '',
+        courier_code: '',
         tracking_number: '',
         note: '',
     });
@@ -163,7 +166,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
         post: postSendCourier,
         processing: sendCourierProcessing,
     } = useForm({
-        courier_id: '',
+        courier_code: '',
     });
 
     const handleStatusUpdate: FormEventHandler = (e) => {
@@ -554,13 +557,13 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                     <form onSubmit={handleAddShipment} className="space-y-4">
                         <div className="grid gap-2">
                             <Label>Courier</Label>
-                            <Select value={shipmentData.courier_id} onValueChange={(v) => setShipmentData('courier_id', v)}>
+                            <Select value={shipmentData.courier_code} onValueChange={(v) => setShipmentData('courier_code', v)}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select courier" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {couriers.map((c) => (
-                                        <SelectItem key={c.id} value={String(c.id)}>
+                                        <SelectItem key={c.code} value={c.code}>
                                             {c.name}
                                         </SelectItem>
                                     ))}
@@ -655,16 +658,18 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                     <form onSubmit={handleSendToCourier} className="space-y-4">
                         <div className="grid gap-2">
                             <Label>Courier</Label>
-                            <Select value={sendCourierData.courier_id} onValueChange={(v) => setSendCourierData('courier_id', v)}>
+                            <Select value={sendCourierData.courier_code} onValueChange={(v) => setSendCourierData('courier_code', v)}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select courier" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {couriers.map((c) => (
-                                        <SelectItem key={c.id} value={String(c.id)}>
-                                            {c.name}
-                                        </SelectItem>
-                                    ))}
+                                    {couriers
+                                        .filter((c) => c.supports_api)
+                                        .map((c) => (
+                                            <SelectItem key={c.code} value={c.code}>
+                                                {c.name}
+                                            </SelectItem>
+                                        ))}
                                 </SelectContent>
                             </Select>
                         </div>

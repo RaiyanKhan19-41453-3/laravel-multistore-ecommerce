@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
@@ -112,10 +111,9 @@ it('paginates orders', function () {
 it('refuses to mark an unpaid pending order delivered via shipment', function () {
     $admin = createAdmin();
     $order = createOrderWithItems('pending');
-    $courier = Courier::factory()->create();
 
     $this->actingAs($admin)->post("/admin/orders/{$order->id}/shipments", [
-        'courier_id' => $courier->id,
+        'courier_code' => 'pathao',
         'tracking_number' => 'PENDING-1',
     ])->assertRedirect();
 
@@ -132,10 +130,9 @@ it('refuses to mark an unpaid pending order delivered via shipment', function ()
 it('marks a confirmed order shipped via shipment pickup', function () {
     $admin = createAdmin();
     $order = createOrderWithItems('confirmed');
-    $courier = Courier::factory()->create();
 
     $this->actingAs($admin)->post("/admin/orders/{$order->id}/shipments", [
-        'courier_id' => $courier->id,
+        'courier_code' => 'pathao',
         'tracking_number' => 'CONF-1',
     ])->assertRedirect();
 

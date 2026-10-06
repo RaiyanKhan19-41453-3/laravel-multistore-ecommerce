@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Webhooks;
 
 use App\Http\Controllers\Controller;
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\Store;
@@ -26,7 +25,7 @@ class PathaoWebhookController extends Controller
 
         // The courier code is a global identifier: never scope it to the
         // resolved store, or webhooks for other stores are ignored.
-        $secret = Courier::withoutGlobalScope(BelongsToStore::class)->where('code', 'pathao')->first()?->settings['webhook_secret'] ?? null;
+        $secret = config('couriers.pathao.webhook_secret');
 
         if ($secret && ! hash_equals((string) $secret, (string) $request->header('X-Webhook-Secret'))) {
             Log::warning('Pathao webhook: invalid signature');

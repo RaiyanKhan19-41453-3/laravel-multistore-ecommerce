@@ -3,14 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\Shipment;
+use App\Services\Couriers\CourierGatewayFactory;
 use App\Services\Couriers\CourierService;
 use App\Services\OrderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -65,7 +66,9 @@ class OrderController extends Controller
     {
         $order->load(['items', 'payments', 'user', 'coupon', 'shipments']);
 
-        $couriers = Courier::where('is_active', true)->orderBy('sort_order')->get();
+        $couriers = collect(CourierGatewayFactory::catalog())
+            ->filter(fn (array $courier) => $courier['enabled'])
+            ->values();
 
         return Inertia::render('admin/orders/show', [
             'order' => $order,
@@ -118,12 +121,10 @@ class OrderController extends Controller
     public function storeShipment(Request $request, Order $order): RedirectResponse
     {
         $validated = $request->validate([
-            'courier_id' => 'required|exists:couriers,id',
+            'courier_code' => ['required', 'string', Rule::in($this->courierCodes())],
             'tracking_number' => 'required|string|max:255',
             'note' => 'nullable|string|max:500',
         ]);
-
-        $courier = Courier::findOrFail($validated['courier_id']);
 
         $order->update(['fulfillment_type' => 'courier']);
 
@@ -132,8 +133,8 @@ class OrderController extends Controller
         // (or the default in the platform view) instead. Set directly; the
         // auto-fill skips non-empty values, so this wins.
         $shipment = $order->shipments()->create([
-            'courier_id' => $courier->id,
-            'courier' => $courier->name,
+            'courier_code' => $validated['courier_code'],
+            'courier' => $this->courierName($validated['courier_code']),
             'tracking_number' => $validated['tracking_number'],
             'status' => 'pending',
             'note' => $validated['note'] ?? null,
@@ -206,17 +207,37 @@ class OrderController extends Controller
     public function sendToCourier(Request $request, Order $order): RedirectResponse
     {
         $validated = $request->validate([
-            'courier_id' => 'required|exists:couriers,id',
+            'courier_code' => ['required', 'string', Rule::in($this->courierCodes())],
         ]);
 
-        $courier = Courier::findOrFail($validated['courier_id']);
+        $code = $validated['courier_code'];
+
+        if (! CourierGatewayFactory::supportsApi($code) || ! CourierGatewayFactory::isEnabled($code)) {
+            return back()->withErrors(['courier_code' => 'That courier cannot send orders by API.']);
+        }
 
         try {
-            $this->courierService->sendToCourier($order, $courier);
+            $this->courierService->sendToCourier($order, $code, $this->courierName($code));
         } catch (\Exception $e) {
-            return back()->withErrors(['courier_id' => 'Failed to send to courier: '.$e->getMessage()]);
+            return back()->withErrors(['courier_code' => 'Failed to send to courier: '.$e->getMessage()]);
         }
 
         return to_route('admin.orders.show', $order);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function courierCodes(): array
+    {
+        return collect(CourierGatewayFactory::catalog())
+            ->filter(fn (array $courier) => $courier['enabled'])
+            ->pluck('code')
+            ->all();
+    }
+
+    private function courierName(string $code): string
+    {
+        return (string) config("couriers.{$code}.name", $code);
     }
 }

@@ -23,6 +23,8 @@ class Payment extends Model
         'amount',
         'gateway',
         'gateway_transaction_id',
+        'idempotency_key',
+        'redirect_url',
         'gateway_response',
         'paid_at',
     ];

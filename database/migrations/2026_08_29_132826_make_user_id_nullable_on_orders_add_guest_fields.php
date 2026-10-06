@@ -35,8 +35,13 @@ return new class extends Migration
         if (in_array(DB::getDriverName(), ['mysql', 'mariadb'])) {
             DB::statement('ALTER TABLE `orders` MODIFY `user_id` BIGINT UNSIGNED NOT NULL');
         } else {
+            // ->constrained() returns the foreign-key definition, so
+            // chaining ->change() onto it would flag the FK instead of the
+            // column; SQLite then compiles the column as a plain ADD and
+            // dies on "duplicate column name". The FK already exists and
+            // the table rebuild preserves it — only nullability flips.
             Schema::table('orders', function (Blueprint $table) {
-                $table->foreignId('user_id')->constrained()->cascadeOnDelete()->change();
+                $table->unsignedBigInteger('user_id')->change();
             });
         }
     }

@@ -13,6 +13,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | database/seeders/PermissionSeeder.php, app/Support/AdminStoreContext.php, app/Http/Controllers/Admin/StoreMemberController.php | .ai/rules/controllers-admin.md |
 | app/Models/Store.php, app/Services/ImageService.php, app/Http/Controllers/Api/StoreController.php | .ai/rules/controllers-api.md |
 | app/Http/Controllers/** | .ai/rules/controllers.md |
+| app/Services/Couriers/**, app/Http/Controllers/Admin/CourierController.php, config/couriers.php | .ai/rules/couriers-http-controllers-admin.md |
 | app/Services/Discounts/** | .ai/rules/discounts.md |
 | ** | .ai/rules/general.md |
 | app/Http/Controllers/Admin/StoreMemberController.php, app/Http/Controllers/Admin/*.php | .ai/rules/http-controllers-admin.md |

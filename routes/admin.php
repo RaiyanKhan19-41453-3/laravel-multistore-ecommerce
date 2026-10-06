@@ -163,12 +163,9 @@ Route::middleware(['auth', ResolveAdminStore::class, EnsureAdminStoreAccess::cla
     Route::post('shipping/rates', [ShippingController::class, 'storeRate'])->middleware('permission:shipping')->name('shipping.rates.store');
     Route::delete('shipping/rates/{rate}', [ShippingController::class, 'destroyRate'])->middleware('permission:shipping')->name('shipping.rates.destroy');
 
+    // Couriers are code/config-managed (config/couriers.php): read-only here.
     Route::get('couriers', [CourierController::class, 'index'])->middleware('permission:shipping')->name('couriers.index');
-    Route::post('couriers', [CourierController::class, 'store'])->middleware('permission:shipping')->name('couriers.store');
-    Route::put('couriers/{courier}', [CourierController::class, 'update'])->middleware('permission:shipping')->name('couriers.update');
-    Route::put('couriers/{courier}/settings', [CourierController::class, 'updateSettings'])->middleware('permission:shipping')->name('couriers.settings.update');
-    Route::post('couriers/{courier}/test-connection', [CourierController::class, 'testConnection'])->middleware('permission:shipping')->name('couriers.test-connection');
-    Route::delete('couriers/{courier}', [CourierController::class, 'destroy'])->middleware('permission:shipping')->name('couriers.destroy');
+    Route::post('couriers/{courierCode}/test-connection', [CourierController::class, 'testConnection'])->middleware('permission:shipping')->name('couriers.test-connection');
 
     Route::get('zatca', [ZatcaController::class, 'index'])->middleware('permission:zatca')->name('zatca.index');
     Route::post('zatca/documents/{document}/retry', [ZatcaController::class, 'retry'])->middleware('role:super-admin')->name('zatca.retry');

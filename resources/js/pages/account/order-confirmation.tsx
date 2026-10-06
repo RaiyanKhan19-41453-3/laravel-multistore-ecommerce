@@ -3,7 +3,7 @@ import StoreButton from '@/components/store/store-button';
 import { apiStore, getUser, type StoreUser } from '@/lib/auth';
 import { formatPrice } from '@/lib/format';
 import { usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, Package, Search, Tag, Truck } from 'lucide-react';
 
 interface OrderItem {
@@ -92,6 +92,9 @@ export default function OrderConfirmation() {
     const [lookupBusy, setLookupBusy] = useState(false);
     const [lookupError, setLookupError] = useState<string | null>(null);
     const [showLookup, setShowLookup] = useState(true);
+    const [retrying, setRetrying] = useState(false);
+    const [retryError, setRetryError] = useState<string | null>(null);
+    const retryKeyRef = useRef<string | null>(null);
 
     const fetchOrder = (identifier: { email?: string; phone?: string }, orderNum: string) => {
         setLoading(true);
@@ -133,6 +136,63 @@ export default function OrderConfirmation() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orderNumber]);
+
+    const handleRetryPayment = () => {
+        if (!order || retrying) {
+            return;
+        }
+
+        const identifier: { email?: string; phone?: string } = {};
+
+        if (lookup.email.trim()) {
+            identifier.email = lookup.email.trim();
+        } else if (lookup.phone.trim()) {
+            identifier.phone = lookup.phone.trim();
+        } else if (currentUser?.phone) {
+            identifier.phone = currentUser.phone;
+        } else if (currentUser?.email) {
+            identifier.email = currentUser.email;
+        } else {
+            setRetryError('We need your email or phone number to retry payment.');
+
+            return;
+        }
+
+        if (!retryKeyRef.current) {
+            retryKeyRef.current =
+                typeof crypto !== 'undefined' && crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+
+        setRetrying(true);
+        setRetryError(null);
+
+        void apiStore<{
+            order_number: string;
+            status: string;
+            payment: { id: number; redirect_url: string | null; replayed: boolean };
+        }>(`/orders/${order.order_number}/retry-payment`, {
+            body: identifier,
+            headers: { 'Idempotency-Key': retryKeyRef.current },
+        }).then((res) => {
+            setRetrying(false);
+
+            if (res.ok && res.data) {
+                const redirectUrl = res.data.payment?.redirect_url;
+
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+
+                    return;
+                }
+
+                fetchOrder(identifier, order.order_number);
+            } else {
+                setRetryError(res.message ?? 'Payment retry failed. Please try again.');
+            }
+        });
+    };
 
     const handleLookup = (e: React.FormEvent) => {
         e.preventDefault();
@@ -392,6 +452,19 @@ export default function OrderConfirmation() {
                                 ? 'Your order is pending payment. Complete payment to confirm.'
                                 : `Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}`}
                     </div>
+                    {order.status === 'pending' && (
+                        <div className="mt-3">
+                            <button
+                                type="button"
+                                onClick={handleRetryPayment}
+                                disabled={retrying}
+                                className="inline-flex items-center rounded-lg bg-[var(--store-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {retrying ? 'Starting secure payment...' : 'Pay now'}
+                            </button>
+                            {retryError && <p className="mt-2 text-xs text-red-500">{retryError}</p>}
+                        </div>
+                    )}
                 </div>
 
                 {/* Tax Invoice (ZATCA) */}

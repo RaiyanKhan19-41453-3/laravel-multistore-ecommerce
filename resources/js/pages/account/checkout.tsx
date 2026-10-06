@@ -72,6 +72,9 @@ export default function Checkout() {
     const [selectedRateId, setSelectedRateId] = useState<number | null>(null);
     const [shippingLoading, setShippingLoading] = useState(false);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
+    const [failedOrderNumber, setFailedOrderNumber] = useState<string | null>(null);
+    const [retrying, setRetrying] = useState(false);
+    const retryKeyRef = useRef<string | null>(null);
     const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const ratesRequestId = useRef(0);
 
@@ -215,6 +218,8 @@ export default function Checkout() {
         setSubmitting(true);
         setError(null);
         setFieldErrors({});
+        setFailedOrderNumber(null);
+        retryKeyRef.current = null;
 
         if (!form.shipping_city) {
             setError('Please enter your city.');
@@ -288,6 +293,20 @@ export default function Checkout() {
             } else {
                 setError(res.message ?? 'Checkout failed. Please try again.');
 
+                // The order exists but payment never started: keep its number
+                // so the customer can retry on the same order. One key per
+                // failure, so double-clicks replay instead of duplicating.
+                const failedNumber = (res.data as { order?: { order_number?: string } } | null)?.order
+                    ?.order_number;
+
+                if (failedNumber) {
+                    setFailedOrderNumber(failedNumber);
+                    retryKeyRef.current =
+                        typeof crypto !== 'undefined' && crypto.randomUUID
+                            ? crypto.randomUUID()
+                            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                }
+
                 if (res.errors) {
                     const mapped: Record<string, string> = {};
 
@@ -297,6 +316,60 @@ export default function Checkout() {
 
                     setFieldErrors(mapped);
                 }
+            }
+        });
+    };
+
+    const handleRetryPayment = () => {
+        if (!failedOrderNumber || retrying) {
+            return;
+        }
+
+        if (!retryKeyRef.current) {
+            retryKeyRef.current =
+                typeof crypto !== 'undefined' && crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+
+        setRetrying(true);
+
+        const retryBody: Record<string, string> = {};
+
+        if (!user) {
+            if (form.guest_email) {
+                retryBody.email = form.guest_email;
+            }
+
+            if (form.phone) {
+                retryBody.phone = form.phone;
+            }
+        }
+
+        void apiStore<{
+            order_number: string;
+            status: string;
+            payment: { id: number; redirect_url: string | null; replayed: boolean };
+        }>(`/orders/${failedOrderNumber}/retry-payment`, {
+            body: retryBody,
+            headers: { 'Idempotency-Key': retryKeyRef.current },
+        }).then((res) => {
+            setRetrying(false);
+
+            if (res.ok && res.data) {
+                const redirectUrl = res.data.payment?.redirect_url;
+
+                setError(null);
+
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+
+                    return;
+                }
+
+                router.visit(`/order-confirmation/${res.data.order_number}`);
+            } else {
+                setError(res.message ?? 'Payment retry failed. Please try again.');
             }
         });
     };
@@ -355,6 +428,16 @@ export default function Checkout() {
                 {error && (
                     <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
                         {error}
+                        {failedOrderNumber && (
+                            <button
+                                type="button"
+                                onClick={handleRetryPayment}
+                                disabled={retrying}
+                                className="mt-2 inline-flex items-center rounded-lg bg-[var(--store-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {retrying ? 'Retrying payment...' : 'Try payment again'}
+                            </button>
+                        )}
                     </div>
                 )}
 

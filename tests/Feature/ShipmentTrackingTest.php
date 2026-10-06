@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Shipment;
@@ -31,11 +30,10 @@ function createShipmentOrder(string $status = 'pending'): Order
 it('admin can add a shipment to an order', function () {
     $admin = createShipmentAdmin();
     $order = createShipmentOrder('confirmed');
-    $courier = Courier::factory()->create(['name' => 'Pathao']);
 
     $response = $this->actingAs($admin)
         ->post("/admin/orders/{$order->id}/shipments", [
-            'courier_id' => $courier->id,
+            'courier_code' => 'pathao',
             'tracking_number' => 'PTH-98765',
             'note' => 'Handle with care',
         ]);
@@ -43,8 +41,8 @@ it('admin can add a shipment to an order', function () {
     $response->assertRedirect();
     $this->assertDatabaseHas('shipments', [
         'order_id' => $order->id,
-        'courier_id' => $courier->id,
-        'courier' => 'Pathao',
+        'courier_code' => 'pathao',
+        'courier' => config('couriers.pathao.name'),
         'tracking_number' => 'PTH-98765',
         'status' => 'pending',
         'note' => 'Handle with care',
@@ -124,11 +122,11 @@ it('shipment requires courier and tracking number', function () {
 
     $response = $this->actingAs($admin)
         ->post("/admin/orders/{$order->id}/shipments", [
-            'courier_id' => '',
+            'courier_code' => '',
             'tracking_number' => '',
         ]);
 
-    $response->assertSessionHasErrors(['courier_id', 'tracking_number']);
+    $response->assertSessionHasErrors(['courier_code', 'tracking_number']);
 });
 
 it('shipment update requires valid status', function () {
@@ -158,11 +156,10 @@ it('order show includes shipments', function () {
 it('requires admin role to manage shipments', function () {
     $user = User::factory()->create();
     $order = createShipmentOrder('confirmed');
-    $courier = Courier::factory()->create();
 
     $response = $this->actingAs($user)
         ->post("/admin/orders/{$order->id}/shipments", [
-            'courier_id' => $courier->id,
+            'courier_code' => 'pathao',
             'tracking_number' => 'PTH-000',
         ]);
 

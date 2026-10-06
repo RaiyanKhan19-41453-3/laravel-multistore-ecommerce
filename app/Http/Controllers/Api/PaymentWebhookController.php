@@ -24,7 +24,7 @@ class PaymentWebhookController extends Controller
         protected OrderService $orderService,
     ) {}
 
-    public function handle(Request $request, string $method): JsonResponse
+    public function handle(Request $request, string $method): JsonResponse|RedirectResponse
     {
         $payload = $request->all();
 
@@ -62,6 +62,22 @@ class PaymentWebhookController extends Controller
 
         if (in_array($payment->status, ['failed', 'cancelled']) && $payment->order->status === 'pending') {
             $this->orderService->handlePaymentFailure($payment->order);
+        }
+
+        // The gateway points the customer's browser at success/fail/cancel
+        // URLs (all this route, with ?type=...) but calls ipn_url
+        // server-to-server. Only the browser gets a redirect; the IPN keeps
+        // its JSON ack. The outcome comes from the verified payment status,
+        // never from the ?type= query value.
+        if ($request->query('type') && $payment->order) {
+            $outcome = match ($payment->status) {
+                'paid' => 'success',
+                'failed' => 'failed',
+                'cancelled' => 'cancelled',
+                default => 'pending',
+            };
+
+            return redirect('/order-confirmation/'.$payment->order->order_number.'?payment='.$method.'_'.$outcome);
         }
 
         return response()->json(['status' => 'ok']);

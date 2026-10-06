@@ -59,7 +59,9 @@ class SSLCommerzGateway implements PaymentGateway
             'shipping_method' => 'NO',
         ];
 
-        $response = Http::timeout(30)
+        // The init endpoint only reads form fields: without asForm()
+        // Laravel sends JSON and the gateway sees no store_id at all.
+        $response = Http::asForm()->timeout(30)
             ->post($this->baseUrl.'/gwprocess/v4/api.php', $payload);
 
         $data = $response->json();

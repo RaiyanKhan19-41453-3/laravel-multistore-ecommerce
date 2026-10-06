@@ -181,6 +181,43 @@ it('persists the sslcommerz tran_id at initiation so lookup and refund work pre-
     expect($payment->fresh()->gateway_transaction_id)->toBe((string) $payment->id);
 });
 
+it('sends the sslcommerz initiation as form fields, not json', function () {
+    Http::fake([
+        'sandbox.sslcommerz.com/gwprocess/*' => Http::response([
+            'status' => 'SUCCESS',
+            'GatewayPageURL' => 'https://sandbox.sslcommerz.com/pay/abc',
+            'sessionkey' => 'sess_abc',
+        ], 200),
+    ]);
+
+    $order = Order::factory()->create(['status' => 'pending', 'total' => 1000]);
+    $payment = Payment::factory()->create([
+        'order_id' => $order->id,
+        'gateway' => 'sslcommerz',
+        'status' => 'pending',
+        'amount' => 1000,
+        'gateway_transaction_id' => null,
+    ]);
+
+    (new SSLCommerzGateway)->initiatePayment($order, $payment);
+
+    // The init endpoint only reads form fields: a JSON body makes the
+    // gateway report store_id missing even though it was "sent".
+    Http::assertSent(function ($request) use ($payment) {
+        $psr = $request->toPsrRequest();
+
+        if (! str_contains((string) $psr->getUri(), '/gwprocess/v4/api.php')) {
+            return false;
+        }
+
+        parse_str((string) $psr->getBody(), $body);
+
+        return str_contains($psr->getHeaderLine('Content-Type'), 'application/x-www-form-urlencoded')
+            && ($body['store_id'] ?? null) === (string) config('payment.gateways.sslcommerz.store_id')
+            && ($body['tran_id'] ?? null) === (string) $payment->id;
+    });
+});
+
 it('sends the stored tran_id when refunding an sslcommerz payment', function () {
     Http::fake([
         'sandbox.sslcommerz.com/gwprocess/*' => Http::response([

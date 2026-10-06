@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\AuditLog;
-use App\Models\Courier;
 use App\Models\Order;
 use Database\Seeders\PermissionSeeder;
 use Spatie\Permission\Models\Role;
@@ -89,17 +88,16 @@ it('does not record admin reads in the audit log', function () {
 
 it('redacts nested secrets from the audit log', function () {
     $admin = createAdmin();
-    $courier = Courier::factory()->create(['code' => 'redx', 'settings' => []]);
 
-    $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'client_id' => 'public-id',
+    $this->actingAs($admin)->put('/admin/settings', [
+        'store' => [
+            'name' => 'public-id',
             'client_secret' => 'super-secret-value',
             'password' => 'hunter2',
         ],
     ])->assertRedirect();
 
-    $log = AuditLog::where('action', 'admin.couriers.settings.update')->latest()->first();
+    $log = AuditLog::where('action', 'admin.settings.update')->latest()->first();
 
     expect($log)->not->toBeNull();
 

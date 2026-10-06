@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Courier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Shipment;
@@ -41,53 +40,25 @@ function createCourierOrder(string $status = 'confirmed'): Order
     return $order;
 }
 
-it('can list couriers', function () {
+it('lists couriers from config, read-only', function () {
     $admin = createCourierAdmin();
-    Courier::factory()->count(3)->create();
 
     $response = $this->actingAs($admin)->get('/admin/couriers');
 
-    $response->assertOk();
+    $response->assertOk()->assertInertia(
+        fn ($page) => $page->component('admin/couriers/index')
+            ->has('couriers', count(config('couriers')))
+            ->where('couriers.0.code', 'pathao')
+    );
 });
 
-it('can create a courier', function () {
+it('has no courier write routes', function () {
     $admin = createCourierAdmin();
 
-    $response = $this->actingAs($admin)->post('/admin/couriers', [
-        'name' => 'Test Courier',
-        'code' => 'test_courier',
-    ]);
-
-    $response->assertRedirect();
-    $this->assertDatabaseHas('couriers', ['code' => 'test_courier']);
-});
-
-it('can update courier settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'pathao']);
-
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'client_id' => 'test-id',
-            'client_secret' => 'test-secret',
-            'sandbox' => true,
-        ],
-    ]);
-
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-id', $courier->settings['client_id']);
-    $this->assertTrue($courier->settings['sandbox']);
-});
-
-it('can delete a courier', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create();
-
-    $response = $this->actingAs($admin)->delete("/admin/couriers/{$courier->id}");
-
-    $response->assertRedirect();
-    $this->assertDatabaseMissing('couriers', ['id' => $courier->id]);
+    // GET stays (read-only page); the write verbs are gone entirely.
+    $this->actingAs($admin)->post('/admin/couriers', ['name' => 'X', 'code' => 'x'])->assertStatus(405);
+    $this->actingAs($admin)->put('/admin/couriers/1', ['name' => 'X'])->assertNotFound();
+    $this->actingAs($admin)->delete('/admin/couriers/1')->assertNotFound();
 });
 
 it('requires admin role to manage couriers', function () {
@@ -100,47 +71,37 @@ it('requires admin role to manage couriers', function () {
 
 it('test connection returns failure for unconfigured courier', function () {
     $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'pathao']);
 
-    $response = $this->actingAs($admin)->post("/admin/couriers/{$courier->id}/test-connection");
+    $response = $this->actingAs($admin)->post('/admin/couriers/pathao/test-connection');
 
     $response->assertJson(['success' => false]);
 });
 
-it('courier code must be unique', function () {
+it('test connection returns 404 for unknown courier', function () {
     $admin = createCourierAdmin();
-    Courier::factory()->create(['code' => 'pathao']);
 
-    $response = $this->actingAs($admin)->post('/admin/couriers', [
-        'name' => 'Another Pathao',
-        'code' => 'pathao',
-    ]);
+    $response = $this->actingAs($admin)->post('/admin/couriers/nopeship/test-connection');
 
-    $response->assertSessionHasErrors(['code']);
+    $response->assertNotFound();
 });
 
-it('can send order to courier via API', function () {
+it('rejects send-to-courier for an unconfigured courier', function () {
     $admin = createCourierAdmin();
-    $courier = Courier::factory()->create([
-        'code' => 'pathao',
-        'settings' => null,
-    ]);
     $order = createCourierOrder('confirmed');
 
     $response = $this->actingAs($admin)->post("/admin/orders/{$order->id}/send-to-courier", [
-        'courier_id' => $courier->id,
+        'courier_code' => 'pathao',
     ]);
 
     $response->assertRedirect();
-    $response->assertSessionHasErrors(['courier_id']);
+    $response->assertSessionHasErrors(['courier_code']);
 });
 
 it('webhook endpoint accepts pathao status updates', function () {
-    $courier = Courier::factory()->create(['code' => 'pathao']);
     $order = createCourierOrder('shipped');
     $shipment = Shipment::factory()->create([
         'order_id' => $order->id,
-        'courier_id' => $courier->id,
+        'courier_code' => 'pathao',
         'courier_order_id' => 'PATHAO-123',
         'status' => 'in_transit',
     ]);
@@ -175,339 +136,191 @@ it('webhook ignores unknown consignment', function () {
     $response->assertOk()->assertJson(['status' => 'not_found']);
 });
 
-it('can update redx courier settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'redx']);
+it('keeps sandbox mode through the settings filter', function () {
+    // settingsFor must not drop false: production (sandbox=false) would
+    // otherwise silently fall back to the gateway's sandbox default.
+    config()->set('couriers.pathao.settings.sandbox', false);
 
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'api_token' => 'test-jwt-token',
-            'sandbox' => true,
-        ],
-    ]);
+    expect(CourierGatewayFactory::settingsFor('pathao'))
+        ->toHaveKey('sandbox', false);
+});
 
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-jwt-token', $courier->settings['api_token']);
-    $this->assertTrue($courier->settings['sandbox']);
+it('builds no gateway for a disabled courier', function () {
+    config()->set('couriers.steadfast.settings', ['api_key' => 'x', 'secret_key' => 'y']);
+    config()->set('couriers.steadfast.enabled', false);
+
+    expect(CourierGatewayFactory::isEnabled('steadfast'))->toBeFalse()
+        ->and(CourierGatewayFactory::make('steadfast'))->toBeNull();
 });
 
 it('redx gateway shows as supports_api', function () {
-    Courier::factory()->create(['code' => 'redx']);
-
     $this->assertTrue(CourierGatewayFactory::supportsApi('redx'));
+});
+
+it('redx gateway factory returns null without settings', function () {
+    $gateway = CourierGatewayFactory::make('redx');
+
+    $this->assertNull($gateway);
+});
+
+it('redx gateway factory returns instance with valid settings', function () {
+    config()->set('couriers.redx.settings', ['api_token' => 'test-token', 'sandbox' => true]);
+
+    $gateway = CourierGatewayFactory::make('redx');
+
+    $this->assertInstanceOf(RedXGateway::class, $gateway);
 });
 
 it('redx gateway fails test connection without settings', function () {
     $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'redx']);
 
-    $response = $this->actingAs($admin)->post("/admin/couriers/{$courier->id}/test-connection");
+    $response = $this->actingAs($admin)->post('/admin/couriers/redx/test-connection');
 
     $response->assertJson(['success' => false]);
 });
 
 it('redx gateway cannot create shipment without settings', function () {
     $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'redx', 'settings' => null]);
     $order = createCourierOrder('confirmed');
 
     $response = $this->actingAs($admin)->post("/admin/orders/{$order->id}/send-to-courier", [
-        'courier_id' => $courier->id,
+        'courier_code' => 'redx',
     ]);
 
     $response->assertRedirect();
-    $response->assertSessionHasErrors(['courier_id']);
-});
-
-it('redx gateway factory returns null for empty settings', function () {
-    $courier = Courier::factory()->create(['code' => 'redx', 'settings' => null]);
-
-    $gateway = CourierGatewayFactory::make($courier);
-
-    $this->assertNull($gateway);
-});
-
-it('redx gateway factory returns instance with valid settings', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'redx',
-        'settings' => ['api_token' => 'test-token', 'sandbox' => true],
-    ]);
-
-    $gateway = CourierGatewayFactory::make($courier);
-
-    $this->assertInstanceOf(RedXGateway::class, $gateway);
-});
-
-it('can update paperfly courier settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'paperfly']);
-
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'merchant_id' => 'test-merchant-id',
-            'username' => 'test-user',
-            'password' => 'test-pass',
-            'sandbox' => false,
-        ],
-    ]);
-
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-merchant-id', $courier->settings['merchant_id']);
-    $this->assertEquals('test-user', $courier->settings['username']);
+    $response->assertSessionHasErrors(['courier_code']);
 });
 
 it('paperfly gateway shows as supports_api', function () {
-    Courier::factory()->create(['code' => 'paperfly']);
-
     $this->assertTrue(CourierGatewayFactory::supportsApi('paperfly'));
 });
 
-it('paperfly gateway factory returns null for empty settings', function () {
-    $courier = Courier::factory()->create(['code' => 'paperfly', 'settings' => null]);
-
-    $gateway = CourierGatewayFactory::make($courier);
+it('paperfly gateway factory returns null without settings', function () {
+    $gateway = CourierGatewayFactory::make('paperfly');
 
     $this->assertNull($gateway);
 });
 
 it('paperfly gateway factory returns instance with valid settings', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'paperfly',
-        'settings' => ['merchant_id' => 'test-id', 'username' => 'user', 'password' => 'pass'],
-    ]);
+    config()->set('couriers.paperfly.settings', ['merchant_id' => 'test-id', 'username' => 'user', 'password' => 'pass']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('paperfly');
 
     $this->assertInstanceOf(PaperflyGateway::class, $gateway);
 });
 
 it('paperfly gateway throws on cancel', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'paperfly',
-        'settings' => ['merchant_id' => 'test-id', 'username' => 'user', 'password' => 'pass'],
-    ]);
+    config()->set('couriers.paperfly.settings', ['merchant_id' => 'test-id', 'username' => 'user', 'password' => 'pass']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('paperfly');
 
     $this->expectException(RuntimeException::class);
     $gateway->cancelShipment('TEST-123');
 });
 
-it('can update steadfast courier settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'steadfast']);
-
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'api_key' => 'test-api-key',
-            'secret_key' => 'test-secret-key',
-            'sandbox' => false,
-        ],
-    ]);
-
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-api-key', $courier->settings['api_key']);
-    $this->assertEquals('test-secret-key', $courier->settings['secret_key']);
-});
-
 it('steadfast gateway shows as supports_api', function () {
-    Courier::factory()->create(['code' => 'steadfast']);
-
     $this->assertTrue(CourierGatewayFactory::supportsApi('steadfast'));
 });
 
-it('steadfast gateway factory returns null for empty settings', function () {
-    $courier = Courier::factory()->create(['code' => 'steadfast', 'settings' => null]);
-
-    $gateway = CourierGatewayFactory::make($courier);
+it('steadfast gateway factory returns null without settings', function () {
+    $gateway = CourierGatewayFactory::make('steadfast');
 
     $this->assertNull($gateway);
 });
 
 it('steadfast gateway factory returns instance with valid settings', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'steadfast',
-        'settings' => ['api_key' => 'test-key', 'secret_key' => 'test-secret'],
-    ]);
+    config()->set('couriers.steadfast.settings', ['api_key' => 'test-key', 'secret_key' => 'test-secret']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('steadfast');
 
     $this->assertInstanceOf(SteadfastGateway::class, $gateway);
 });
 
 it('steadfast gateway throws on cancel', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'steadfast',
-        'settings' => ['api_key' => 'test-key', 'secret_key' => 'test-secret'],
-    ]);
+    config()->set('couriers.steadfast.settings', ['api_key' => 'test-key', 'secret_key' => 'test-secret']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('steadfast');
 
     $this->expectException(RuntimeException::class);
     $gateway->cancelShipment('TEST-123');
 });
 
-it('can update ecourier settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'ecourier']);
-
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'user_id' => 'test-user-id',
-            'api_key' => 'test-api-key',
-            'sandbox' => false,
-        ],
-    ]);
-
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-user-id', $courier->settings['user_id']);
-    $this->assertEquals('test-api-key', $courier->settings['api_key']);
-});
-
 it('ecourier gateway shows as supports_api', function () {
-    Courier::factory()->create(['code' => 'ecourier']);
-
     $this->assertTrue(CourierGatewayFactory::supportsApi('ecourier'));
 });
 
-it('ecourier gateway factory returns null for empty settings', function () {
-    $courier = Courier::factory()->create(['code' => 'ecourier', 'settings' => null]);
-
-    $gateway = CourierGatewayFactory::make($courier);
+it('ecourier gateway factory returns null without settings', function () {
+    $gateway = CourierGatewayFactory::make('ecourier');
 
     $this->assertNull($gateway);
 });
 
 it('ecourier gateway factory returns instance with valid settings', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'ecourier',
-        'settings' => ['user_id' => 'test-user', 'api_key' => 'test-key'],
-    ]);
+    config()->set('couriers.ecourier.settings', ['user_id' => 'test-user', 'api_key' => 'test-key']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('ecourier');
 
     $this->assertInstanceOf(ECourierGateway::class, $gateway);
 });
 
 it('ecourier gateway throws on cancel', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'ecourier',
-        'settings' => ['user_id' => 'test-user', 'api_key' => 'test-key'],
-    ]);
+    config()->set('couriers.ecourier.settings', ['user_id' => 'test-user', 'api_key' => 'test-key']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('ecourier');
 
     $this->expectException(RuntimeException::class);
     $gateway->cancelShipment('TEST-123');
 });
 
-it('can update sa_paribahan settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'sa_paribahan']);
-
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'api_key' => 'test-api-token',
-            'booking_branch' => 'Dhaka',
-        ],
-    ]);
-
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-api-token', $courier->settings['api_key']);
-    $this->assertEquals('Dhaka', $courier->settings['booking_branch']);
-});
-
 it('sa_paribahan gateway shows as supports_api', function () {
-    Courier::factory()->create(['code' => 'sa_paribahan']);
-
     $this->assertTrue(CourierGatewayFactory::supportsApi('sa_paribahan'));
 });
 
-it('sa_paribahan gateway factory returns null for empty settings', function () {
-    $courier = Courier::factory()->create(['code' => 'sa_paribahan', 'settings' => null]);
-
-    $gateway = CourierGatewayFactory::make($courier);
+it('sa_paribahan gateway factory returns null without settings', function () {
+    $gateway = CourierGatewayFactory::make('sa_paribahan');
 
     $this->assertNull($gateway);
 });
 
 it('sa_paribahan gateway factory returns instance with valid settings', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'sa_paribahan',
-        'settings' => ['api_key' => 'test-token', 'booking_branch' => 'Dhaka'],
-    ]);
+    config()->set('couriers.sa_paribahan.settings', ['api_key' => 'test-token', 'booking_branch' => 'Dhaka']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('sa_paribahan');
 
     $this->assertInstanceOf(SAParibahanGateway::class, $gateway);
 });
 
 it('sa_paribahan gateway throws on cancel', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'sa_paribahan',
-        'settings' => ['api_key' => 'test-token', 'booking_branch' => 'Dhaka'],
-    ]);
+    config()->set('couriers.sa_paribahan.settings', ['api_key' => 'test-token', 'booking_branch' => 'Dhaka']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('sa_paribahan');
 
     $this->expectException(RuntimeException::class);
     $gateway->cancelShipment('TEST-123');
 });
 
-it('can update sundarban settings', function () {
-    $admin = createCourierAdmin();
-    $courier = Courier::factory()->create(['code' => 'sundarban']);
-
-    $response = $this->actingAs($admin)->put("/admin/couriers/{$courier->id}/settings", [
-        'settings' => [
-            'api_key' => 'test-api-token',
-            'booking_user_id' => 'test-user-id',
-        ],
-    ]);
-
-    $response->assertRedirect();
-    $courier->refresh();
-    $this->assertEquals('test-api-token', $courier->settings['api_key']);
-    $this->assertEquals('test-user-id', $courier->settings['booking_user_id']);
-});
-
 it('sundarban gateway shows as supports_api', function () {
-    Courier::factory()->create(['code' => 'sundarban']);
-
     $this->assertTrue(CourierGatewayFactory::supportsApi('sundarban'));
 });
 
-it('sundarban gateway factory returns null for empty settings', function () {
-    $courier = Courier::factory()->create(['code' => 'sundarban', 'settings' => null]);
-
-    $gateway = CourierGatewayFactory::make($courier);
+it('sundarban gateway factory returns null without settings', function () {
+    $gateway = CourierGatewayFactory::make('sundarban');
 
     $this->assertNull($gateway);
 });
 
 it('sundarban gateway factory returns instance with valid settings', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'sundarban',
-        'settings' => ['api_key' => 'test-token', 'booking_user_id' => 'test-user'],
-    ]);
+    config()->set('couriers.sundarban.settings', ['api_key' => 'test-token', 'booking_user_id' => 'test-user']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('sundarban');
 
     $this->assertInstanceOf(SundarbanGateway::class, $gateway);
 });
 
 it('sundarban gateway throws on cancel', function () {
-    $courier = Courier::factory()->create([
-        'code' => 'sundarban',
-        'settings' => ['api_key' => 'test-token', 'booking_user_id' => 'test-user'],
-    ]);
+    config()->set('couriers.sundarban.settings', ['api_key' => 'test-token', 'booking_user_id' => 'test-user']);
 
-    $gateway = CourierGatewayFactory::make($courier);
+    $gateway = CourierGatewayFactory::make('sundarban');
 
     $this->expectException(RuntimeException::class);
     $gateway->cancelShipment('TEST-123');
@@ -520,12 +333,11 @@ it('anchors manual shipments to the order store, not the resolved store', functi
 
     $order = createCourierOrder();
     $order->update(['store_id' => $storeB->id]);
-    $courier = Courier::factory()->create(['store_id' => $storeB->id]);
 
     // Platform view (no selection): resolved store falls back to the
     // default, but the shipment belongs to the order's store.
     $this->actingAs($admin)->post("/admin/orders/{$order->id}/shipments", [
-        'courier_id' => $courier->id,
+        'courier_code' => 'pathao',
         'tracking_number' => 'TRACK-B-1',
     ])->assertRedirect();
 
@@ -542,17 +354,14 @@ it('refuses to send an unpaid pending order to the courier', function () {
     ], 200)]);
 
     $admin = createCourierAdmin();
-    $courier = Courier::factory()->create([
-        'code' => 'steadfast',
-        'settings' => ['api_key' => 'x', 'secret_key' => 'y'],
-    ]);
+    config()->set('couriers.steadfast.settings', ['api_key' => 'x', 'secret_key' => 'y']);
     $order = createCourierOrder('pending');
 
     // Gateway would succeed, but unpaid goods must never ship: the state
     // machine rejects the jump and the admin sees the error.
     $this->actingAs($admin)->post("/admin/orders/{$order->id}/send-to-courier", [
-        'courier_id' => $courier->id,
-    ])->assertSessionHasErrors(['courier_id']);
+        'courier_code' => 'steadfast',
+    ])->assertSessionHasErrors(['courier_code']);
 
     expect($order->fresh()->status)->toBe('pending');
 });

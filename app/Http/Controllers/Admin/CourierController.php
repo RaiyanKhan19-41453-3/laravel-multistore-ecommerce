@@ -3,14 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Courier;
+use App\Models\Shipment;
 use App\Services\Couriers\CourierGatewayFactory;
 use App\Services\Couriers\CourierService;
-use App\Support\CurrentStore;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,78 +18,33 @@ class CourierController extends Controller
 
     public function index(): Response
     {
-        $couriers = Courier::withCount('shipments')->orderBy('sort_order')->get()
-            ->map(fn (Courier $courier) => array_merge($courier->toArray(), [
-                'supports_api' => CourierGatewayFactory::supportsApi($courier->code),
-                'settings_schema' => CourierGatewayFactory::getSettingsSchema($courier->code),
-            ]));
+        $shipmentsByCode = Shipment::query()
+            ->whereNotNull('courier_code')
+            ->selectRaw('courier_code, COUNT(*) as shipments_count')
+            ->groupBy('courier_code')
+            ->pluck('shipments_count', 'courier_code');
+
+        $couriers = collect(CourierGatewayFactory::catalog())
+            ->map(fn (array $courier) => $courier + [
+                'shipments_count' => (int) $shipmentsByCode->get($courier['code'], 0),
+            ]);
 
         return Inertia::render('admin/couriers/index', [
             'couriers' => $couriers,
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function testConnection(string $courierCode): JsonResponse
     {
-        $storeId = app(CurrentStore::class)->scopeId();
+        if (! config("couriers.{$courierCode}")) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unknown courier.',
+            ], 404);
+        }
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'code' => ['required', 'string', 'max:100', Rule::unique('couriers', 'code')->where('store_id', $storeId)],
-            'is_active' => 'boolean',
-            'sort_order' => 'integer|min:0',
-        ]);
-
-        Courier::create($validated);
-
-        return to_route('admin.couriers.index');
-    }
-
-    public function update(Request $request, Courier $courier): RedirectResponse
-    {
-        $storeId = app(CurrentStore::class)->scopeId();
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'code' => ['required', 'string', 'max:100', Rule::unique('couriers', 'code')->ignore($courier->id)->where('store_id', $courier->store_id ?? $storeId)],
-            'is_active' => 'boolean',
-            'sort_order' => 'integer|min:0',
-        ]);
-
-        $courier->update($validated);
-
-        return to_route('admin.couriers.index');
-    }
-
-    public function updateSettings(Request $request, Courier $courier): RedirectResponse
-    {
-        $validated = $request->validate([
-            'settings' => 'required|array',
-            'settings.client_id' => 'nullable|string|max:255',
-            'settings.client_secret' => 'nullable|string|max:255',
-            'settings.username' => 'nullable|string|max:255',
-            'settings.password' => 'nullable|string|max:255',
-            'settings.store_id' => 'nullable|string|max:255',
-            'settings.api_token' => 'nullable|string|max:255',
-            'settings.merchant_id' => 'nullable|string|max:255',
-            'settings.api_key' => 'nullable|string|max:255',
-            'settings.secret_key' => 'nullable|string|max:255',
-            'settings.user_id' => 'nullable|string|max:255',
-            'settings.booking_branch' => 'nullable|string|max:255',
-            'settings.booking_user_id' => 'nullable|string|max:255',
-            'settings.webhook_secret' => 'nullable|string|max:255',
-            'settings.sandbox' => 'boolean',
-        ]);
-
-        $courier->update(['settings' => $validated['settings']]);
-
-        return to_route('admin.couriers.index');
-    }
-
-    public function testConnection(Courier $courier): JsonResponse
-    {
         try {
-            $success = $this->courierService->testConnection($courier);
+            $success = $this->courierService->testConnection($courierCode);
 
             return response()->json([
                 'success' => $success,
@@ -105,12 +56,5 @@ class CourierController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
-    }
-
-    public function destroy(Courier $courier): RedirectResponse
-    {
-        $courier->delete();
-
-        return to_route('admin.couriers.index');
     }
 }
