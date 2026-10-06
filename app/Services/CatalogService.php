@@ -22,6 +22,7 @@ class CatalogService
     {
         $query = Product::active()
             ->with('brand')
+            ->with(['inventory', 'variants.inventory'])
             ->withCount('variants')
             ->withCount(['reviews as approved_reviews_count' => fn ($q) => $q->approved()])
             ->withAvg(['reviews as approved_reviews_avg' => fn ($q) => $q->approved()], 'rating');
@@ -119,6 +120,7 @@ class CatalogService
         return Product::active()
             ->featured()
             ->with(['brand', 'images' => fn ($q) => $q->primary()->limit(1)])
+            ->with(['inventory', 'variants.inventory'])
             ->withCount('variants')
             ->withCount(['reviews as approved_reviews_count' => fn ($q) => $q->approved()])
             ->withAvg(['reviews as approved_reviews_avg' => fn ($q) => $q->approved()], 'rating')
@@ -170,11 +172,28 @@ class CatalogService
             ] : null,
             'primary_image' => $image?->getUrl('medium'),
             'variants_count' => $product->variants_count,
+            'in_stock' => $this->isInStock($product),
             'review_summary' => [
                 'total' => (int) ($product->approved_reviews_count ?? 0),
                 'average' => (float) ($product->approved_reviews_avg ?? 0),
             ],
         ];
+    }
+
+    /**
+     * Card-level availability mirrors the details page: available (net of
+     * reservations) above zero. Variable products are in stock when any
+     * variant is.
+     */
+    private function isInStock(Product $product): bool
+    {
+        if ($product->type === 'variable') {
+            return $product->variants->contains(
+                fn ($variant) => ($variant->inventory?->getAvailableQuantity() ?? 0) > 0
+            );
+        }
+
+        return ($product->inventory?->getAvailableQuantity() ?? 0) > 0;
     }
 
     /**

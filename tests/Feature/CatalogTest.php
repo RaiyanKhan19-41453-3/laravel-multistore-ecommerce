@@ -5,6 +5,7 @@ use App\Models\AttributeValue;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Discount;
+use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Review;
@@ -59,6 +60,53 @@ it('loads approved review aggregates without per-product review queries', functi
 
     $first = $response->json('data.data.0');
     expect($first['review_summary'])->toMatchArray(['total' => 2, 'average' => 4.0]);
+});
+
+it('exposes stock availability on listing cards', function () {
+    $inStock = Product::factory()->create(['is_active' => true]);
+    Inventory::factory()->forProduct($inStock)->withQuantity(5)->create();
+
+    $soldOut = Product::factory()->create(['is_active' => true]);
+    Inventory::factory()->forProduct($soldOut)->withQuantity(0)->create();
+
+    $items = collect($this->getJson('/api/products?per_page=10')->assertOk()->json('data.data'))
+        ->keyBy('id');
+
+    expect($items[$inStock->id]['in_stock'])->toBeTrue()
+        ->and($items[$soldOut->id]['in_stock'])->toBeFalse();
+});
+
+it('marks variable products in stock when any variant has stock', function () {
+    $product = Product::factory()->create(['is_active' => true, 'type' => 'variable']);
+    $first = ProductVariant::factory()->for($product)->create();
+    $second = ProductVariant::factory()->for($product)->create();
+    Inventory::factory()->forVariant($first)->withQuantity(0)->create();
+    $secondInventory = Inventory::factory()->forVariant($second)->withQuantity(2)->create();
+
+    $items = collect($this->getJson('/api/products?per_page=10')->assertOk()->json('data.data'))
+        ->keyBy('id');
+
+    expect($items[$product->id]['in_stock'])->toBeTrue();
+
+    $secondInventory->update(['quantity' => 0]);
+
+    $items = collect($this->getJson('/api/products?per_page=10')->assertOk()->json('data.data'))
+        ->keyBy('id');
+
+    expect($items[$product->id]['in_stock'])->toBeFalse();
+});
+
+it('refreshes featured stock badges when inventory sells out', function () {
+    CatalogCache::flushFeatured();
+
+    $product = Product::factory()->create(['is_active' => true, 'is_featured' => true]);
+    $inventory = Inventory::factory()->forProduct($product)->withQuantity(3)->create();
+
+    expect($this->getJson('/api/products/featured')->json('data.0.in_stock'))->toBeTrue();
+
+    $inventory->update(['quantity' => 0]);
+
+    expect($this->getJson('/api/products/featured')->json('data.0.in_stock'))->toBeFalse();
 });
 
 it('serves featured products from cache and flushes on product save', function () {

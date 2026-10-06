@@ -24,6 +24,15 @@ class CourierService
             throw new \RuntimeException("Courier '{$courierName}' is not configured or does not support API integration.");
         }
 
+        // Gate before creating anything: dispatching an unpaid (or
+        // finished) order would book a real consignment at the courier
+        // and then fail the state machine, orphaning the booking.
+        if (! $this->orderService->isShippable($order)) {
+            throw new \InvalidArgumentException(
+                "Only confirmed or processing orders can be sent to a courier. Current status: '{$order->status}'."
+            );
+        }
+
         $shipment = $order->shipments()->create([
             'courier_code' => $courierCode,
             'courier' => $courierName,

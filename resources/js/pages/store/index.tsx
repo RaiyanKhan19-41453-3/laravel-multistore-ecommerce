@@ -43,6 +43,7 @@ interface FeaturedProduct {
     brand: { id: number; name: string; slug: string } | null;
     primary_image: string | null;
     variants_count: number;
+    in_stock: boolean;
 }
 
 interface Category {
@@ -73,6 +74,7 @@ function toSummary(product: FeaturedProduct): ProductSummary {
         brand: product.brand,
         primary_image: product.primary_image,
         variants_count: product.variants_count,
+        in_stock: product.in_stock,
         review_summary: { total: 0, average: 0 },
     };
 }

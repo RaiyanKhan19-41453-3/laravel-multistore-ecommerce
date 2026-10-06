@@ -345,6 +345,15 @@ class OrderService
      *
      * @throws \InvalidArgumentException
      */
+    /**
+     * Whether the order may move toward shipped (used to gate courier
+     * dispatch before any shipment row or API call is created).
+     */
+    public function isShippable(Order $order): bool
+    {
+        return in_array($order->status, ['confirmed', 'processing', 'shipped'], true);
+    }
+
     public function markShipped(Order $order): void
     {
         if ($order->status === 'shipped') {
@@ -353,7 +362,7 @@ class OrderService
             return;
         }
 
-        if (! in_array($order->status, ['confirmed', 'processing'], true)) {
+        if (! $this->isShippable($order)) {
             throw new \InvalidArgumentException(
                 "Cannot mark order as shipped from '{$order->status}'."
             );

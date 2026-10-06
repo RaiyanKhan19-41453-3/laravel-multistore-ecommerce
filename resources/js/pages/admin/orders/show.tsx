@@ -165,6 +165,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
         setData: setSendCourierData,
         post: postSendCourier,
         processing: sendCourierProcessing,
+        errors: sendCourierErrors,
     } = useForm({
         courier_code: '',
     });
@@ -664,7 +665,7 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                                 </SelectTrigger>
                                 <SelectContent>
                                     {couriers
-                                        .filter((c) => c.supports_api)
+                                        .filter((c) => c.supports_api && c.configured)
                                         .map((c) => (
                                             <SelectItem key={c.code} value={c.code}>
                                                 {c.name}
@@ -672,6 +673,9 @@ export default function OrderShow({ order, couriers }: { order: Order; couriers:
                                         ))}
                                 </SelectContent>
                             </Select>
+                            {sendCourierErrors.courier_code && (
+                                <p className="text-sm text-red-500">{sendCourierErrors.courier_code}</p>
+                            )}
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setShowSendToCourierDialog(false)}>

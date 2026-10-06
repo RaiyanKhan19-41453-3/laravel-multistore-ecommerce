@@ -97,6 +97,64 @@ it('rejects send-to-courier for an unconfigured courier', function () {
     $response->assertSessionHasErrors(['courier_code']);
 });
 
+it('refuses send-to-courier for a pending order without calling the gateway', function () {
+    config()->set('couriers.steadfast.settings', ['api_key' => 'x', 'secret_key' => 'y']);
+    config()->set('couriers.steadfast.enabled', true);
+
+    Http::fake([
+        'portal.packzy.com/*' => Http::response([
+            'status' => 200,
+            'consignment' => ['consignment_id' => 'SF-1', 'tracking_code' => 'TRK-1'],
+        ], 200),
+    ]);
+
+    $admin = createCourierAdmin();
+    $order = createCourierOrder('pending');
+
+    $response = $this->actingAs($admin)->post("/admin/orders/{$order->id}/send-to-courier", [
+        'courier_code' => 'steadfast',
+    ]);
+
+    $response->assertRedirect();
+    $response->assertSessionHasErrors(['courier_code']);
+
+    // Nothing booked anywhere: no shipment row and no API call, so the
+    // courier never holds a consignment the state machine would reject.
+    $this->assertDatabaseMissing('shipments', ['order_id' => $order->id]);
+    Http::assertSentCount(0);
+    expect($order->fresh()->status)->toBe('pending');
+});
+
+it('sends a confirmed order to steadfast and stores tracking', function () {
+    config()->set('couriers.steadfast.settings', ['api_key' => 'x', 'secret_key' => 'y']);
+    config()->set('couriers.steadfast.enabled', true);
+
+    Http::fake([
+        'portal.packzy.com/*' => Http::response([
+            'status' => 200,
+            'consignment' => ['consignment_id' => 'SF-1', 'tracking_code' => 'TRK-1'],
+        ], 200),
+    ]);
+
+    $admin = createCourierAdmin();
+    $order = createCourierOrder('confirmed');
+
+    $response = $this->actingAs($admin)->post("/admin/orders/{$order->id}/send-to-courier", [
+        'courier_code' => 'steadfast',
+    ]);
+
+    $response->assertRedirect();
+    $response->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('shipments', [
+        'order_id' => $order->id,
+        'courier_code' => 'steadfast',
+        'tracking_number' => 'TRK-1',
+        'status' => 'pending',
+    ]);
+    expect($order->fresh()->status)->toBe('shipped');
+});
+
 it('webhook endpoint accepts pathao status updates', function () {
     $order = createCourierOrder('shipped');
     $shipment = Shipment::factory()->create([

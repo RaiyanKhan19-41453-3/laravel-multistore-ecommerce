@@ -36,6 +36,7 @@ use App\Models\ZatcaDocument;
 use App\Observers\BrandObserver;
 use App\Observers\CategoryObserver;
 use App\Observers\CmsPageObserver;
+use App\Observers\InventoryObserver;
 use App\Observers\ProductObserver;
 use App\Support\AdminStoreContext;
 use App\Support\CurrentStore;
@@ -62,6 +63,7 @@ class AppServiceProvider extends ServiceProvider
         Category::observe(CategoryObserver::class);
         Brand::observe(BrandObserver::class);
         CmsPage::observe(CmsPageObserver::class);
+        Inventory::observe(InventoryObserver::class);
 
         $this->autoFillStoreId();
     }

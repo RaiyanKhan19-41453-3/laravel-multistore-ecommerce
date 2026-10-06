@@ -19,6 +19,11 @@ export default function ProductCard({ product, compact = false }: { product: Pro
                 <div className="h-full w-full transition duration-500 group-hover:scale-105">
                     <ProductImage src={product.primary_image} seed={product.id} alt={product.name} />
                 </div>
+                {!product.in_stock && (
+                    <span className="absolute start-2 top-2 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold tracking-wide text-white uppercase">
+                        {t('store.out_of_stock')}
+                    </span>
+                )}
                 <button
                     type="button"
                     title={t('store.quick_view')}

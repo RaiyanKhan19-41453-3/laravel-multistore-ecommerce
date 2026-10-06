@@ -65,6 +65,7 @@ export interface ProductSummary {
     brand: { id: number; name: string; slug: string } | null;
     primary_image: string | null;
     variants_count: number;
+    in_stock: boolean;
     review_summary: { total: number; average: number };
 }
 
